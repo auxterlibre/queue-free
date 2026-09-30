@@ -3,5 +3,32 @@ import Default from '@astrojs/starlight/components/Sidebar.astro';
 import Search from 'virtual:starlight/components/Search';
 ---
 
-<Search />
-<Default />
+{/*
+	Persisted across client-side navigations so the search (Pagefind, Cmd+K),
+	Starlight's collapse-state script, scroll position and open groups all
+	survive a page swap. Only the current-page marker needs refreshing.
+*/}
+<div class="qf-sidebar" transition:persist="sidebar">
+	<Search />
+	<Default />
+</div>
+
+<style>
+	/* 32px between the search box and the first group, per the design. */
+	div {
+		display: flex;
+		flex-direction: column;
+		gap: 2rem;
+	}
+</style>
+
+<script>
+	document.addEventListener('astro:after-swap', () => {
+		const path = location.pathname.replace(/\/$/, '');
+		for (const a of document.querySelectorAll<HTMLAnchorElement>('.sidebar-content a[href]')) {
+			const isCurrent = new URL(a.href).pathname.replace(/\/$/, '') === path;
+			if (isCurrent) a.setAttribute('aria-current', 'page');
+			else a.removeAttribute('aria-current');
+		}
+	});
+</script>

@@ -73,13 +73,27 @@ const icon = (name: string) => `/godot-editor-icons/${name}.svg`;
 		color: var(--qf-code-default);
 		overflow-x: auto;
 	}
+	.scene-tree {
+		--line: 1px solid var(--qf-frame-line);
+		--indent: 14px;
+	}
+	/* Guide sits at the parent icon's centre (8px); children start past the tick. */
 	ul ul {
-		margin: 0 0 0 7px;
-		padding-left: 14px;
-		border-left: 1px solid #4a5160;
+		margin: 0 0 0 8px;
+		padding-left: var(--indent);
 	}
 	li {
 		margin: 0;
+		position: relative;
+	}
+	/* Vertical guide runs the full item height, except for the last child... */
+	ul ul > li:not(:last-child)::before {
+		content: '';
+		position: absolute;
+		left: calc(-1 * var(--indent));
+		top: 0;
+		bottom: 0;
+		border-left: var(--line);
 	}
 	.row {
 		display: flex;
@@ -87,10 +101,52 @@ const icon = (name: string) => `/godot-editor-icons/${name}.svg`;
 		gap: 0.4rem;
 		padding: 0.15rem 0;
 		white-space: nowrap;
+		position: relative;
+	}
+	/* ...where it stops at the row's centre, meeting the tick to form a corner. */
+	ul ul > li > .row::before {
+		content: '';
+		position: absolute;
+		left: calc(-1 * var(--indent));
+		top: 0;
+		height: 50%;
+		border-left: var(--line);
+	}
+	ul ul > li > .row::after {
+		content: '';
+		position: absolute;
+		left: calc(-1 * var(--indent));
+		top: 50%;
+		width: 10px;
+		border-top: var(--line);
 	}
 	.type {
-		color: #8a93a3;
+		color: var(--qf-frame-muted);
 		font-size: var(--sl-text-xs);
+	}
+	/* Hover highlight like the Godot scene dock. The box-shadow spread pads the
+	   highlight without changing the row box that the guide lines anchor to. */
+	@media (hover: hover) {
+		.row {
+			--hl: color-mix(in srgb, var(--qf-code-default) 10%, transparent);
+			border-radius: 0.125rem;
+		}
+		.row:hover {
+			background: var(--hl);
+			box-shadow: 0 0 0 0.25rem var(--hl);
+		}
+		.row:hover .note {
+			filter: brightness(1.2) saturate(1.2);
+		}
+		:global(:root[data-theme='light']) .row:hover .note {
+			filter: brightness(0.8) saturate(1.2);
+		}
+		@media (prefers-reduced-motion: no-preference) {
+			.row,
+			.note {
+				transition: background-color 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
+			}
+		}
 	}
 	.flag,
 	.script {

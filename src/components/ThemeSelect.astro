@@ -12,11 +12,18 @@
 
 <script>
 	class QfThemeToggle extends HTMLElement {
+		static timer: ReturnType<typeof setTimeout> | undefined;
 		constructor() {
 			super();
 			this.querySelector('button')?.addEventListener('click', () => {
 				const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-				document.documentElement.dataset.theme = next;
+				// `qf-theming` enables colour transitions only while switching, so
+				// nothing animates on page load or navigation.
+				const root = document.documentElement;
+				root.classList.add('qf-theming');
+				clearTimeout(QfThemeToggle.timer);
+				QfThemeToggle.timer = setTimeout(() => root.classList.remove('qf-theming'), 300);
+				root.dataset.theme = next;
 				try {
 					localStorage.setItem('starlight-theme', next);
 				} catch {}

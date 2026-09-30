@@ -96,6 +96,12 @@
 	scrollbar-gutter: auto;
 }
 
+/* Client-side navigation swaps content instantly; no cross-fade. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation: none;
+}
+
 .content-panel h1 {
 	margin-top: 0.5rem;
 }
@@ -124,6 +130,22 @@
 	display: block;
 }
 
+/* Swap Starlight's magnifier for the design's icon, keeping the text colour. */
+.sidebar-content site-search button[data-open-modal] > svg {
+	display: none;
+}
+
+.sidebar-content site-search button[data-open-modal]::before {
+	content: '';
+	flex: none;
+	width: 16px;
+	height: 16px;
+	background: currentColor;
+	/* Inlined so the icon paints with the first frame instead of after a request. */
+	mask: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.0667 14L8.86667 9.8C8.53333 10.0667 8.15 10.2778 7.71667 10.4333C7.28333 10.5889 6.82222 10.6667 6.33333 10.6667C5.12222 10.6667 4.09722 10.2472 3.25833 9.40833C2.41944 8.56944 2 7.54444 2 6.33333C2 5.12222 2.41944 4.09722 3.25833 3.25833C4.09722 2.41944 5.12222 2 6.33333 2C7.54444 2 8.56944 2.41944 9.40833 3.25833C10.2472 4.09722 10.6667 5.12222 10.6667 6.33333C10.6667 6.82222 10.5889 7.28333 10.4333 7.71667C10.2778 8.15 10.0667 8.53333 9.8 8.86667L14 13.0667L13.0667 14ZM6.33333 9.33333C7.16667 9.33333 7.875 9.04167 8.45833 8.45833C9.04167 7.875 9.33333 7.16667 9.33333 6.33333C9.33333 5.5 9.04167 4.79167 8.45833 4.20833C7.875 3.625 7.16667 3.33333 6.33333 3.33333C5.5 3.33333 4.79167 3.625 4.20833 4.20833C3.625 4.79167 3.33333 5.5 3.33333 6.33333C3.33333 7.16667 3.625 7.875 4.20833 8.45833C4.79167 9.04167 5.5 9.33333 6.33333 9.33333Z' fill='%236B6B6B'/%3E%3C/svg%3E")
+		center / contain no-repeat;
+}
+
 .sidebar-content site-search button[data-open-modal] > kbd {
 	display: none !important;
 }
@@ -134,6 +156,25 @@
 	color: var(--qf-text);
 }
 
+/* Flush with the container so the list's guide line sits under the first character. */
+.sidebar-content summary {
+	padding: 0;
+	line-height: 1.5rem;
+}
+
+/* (A zero-height <sl-sidebar-restore> sits between summary and ul, so no `+`.) */
+.sidebar-content details > ul {
+	margin-top: 0.5rem;
+}
+
+.sidebar-content .top-level > li + li {
+	margin-top: 1rem;
+}
+
+.sidebar-content summary .caret {
+	display: none;
+}
+
 .sidebar-content ul ul li {
 	margin-inline-start: 0;
 	border-inline-start: 1px solid var(--qf-line);
@@ -142,7 +183,7 @@
 
 .sidebar-content ul ul a {
 	font-size: 1rem;
-	font-weight: 700;
+	font-weight: 400;
 	line-height: 1.5rem;
 	padding: 0.25rem 0.5rem;
 	color: var(--qf-text);
@@ -153,7 +194,7 @@
 .sidebar-content [aria-current='page']:focus {
 	background: var(--qf-line);
 	color: var(--qf-text);
-	font-weight: 700;
+	font-weight: 400;
 }
 
 .right-sidebar h2 {
@@ -202,6 +243,11 @@
 	color: var(--qf-text);
 }
 
+/* :not(pre code) matches the specificity of the rule above so headings win. */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6) code:not(pre code) {
+	font-size: inherit;
+}
+
 .sl-markdown-content code.qf-node-path,
 .sl-markdown-content code.qf-node-reference {
 	color: var(--qf-code-path);
@@ -219,23 +265,116 @@
 	color: var(--qf-code-error);
 }
 
-:root[data-theme='light'] .sl-markdown-content code.qf-node-path {
-	color: #2e8c00;
+/* Inside a link, code takes the link colour so the link reads as one unit.
+   The second selector outranks the token-colour rules above. */
+.sl-markdown-content a code:not(pre code),
+.sl-markdown-content a code[class]:not(pre code) {
+	color: inherit;
 }
-:root[data-theme='light'] .sl-markdown-content code.qf-node-reference {
-	color: #008000;
+
+/* Diff indicators: Material "close" and "check" icons, coloured by the marker. */
+.expressive-code .ec-line:is(.ins, .del) > .code::before {
+	inset-block: 0;
+	/* Empty content collapses the box, so size it explicitly. */
+	width: 1em;
+	margin-inline-start: 0;
+	background: currentColor;
+	mask: var(--qf-diff-icon) center / 1em no-repeat;
 }
-:root[data-theme='light'] .sl-markdown-content code.qf-annotation {
-	color: #cc5e00;
+.expressive-code .ec-line.del > .code::before {
+	--qf-diff-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='m336-280-56-56 144-144-144-143 56-56 144 144 143-144 56 56-144 143 144 144-56 56-143-144-144 144Z'/%3E%3C/svg%3E");
 }
-:root[data-theme='light'] .sl-markdown-content code.qf-function {
-	color: #0039e6;
+.expressive-code .ec-line.ins > .code::before {
+	--qf-diff-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='M400-304 240-464l56-56 104 104 264-264 56 56-320 320Z'/%3E%3C/svg%3E");
 }
-:root[data-theme='light'] .sl-markdown-content code.qf-keyword {
-	color: #e62282;
+
+/* Asides: 8px radius, 8px left border, 16px padding, 8px gap; body-sized title. */
+.starlight-aside {
+	border-inline-start-width: 0.5rem;
+	border-radius: 0.5rem;
 }
-:root[data-theme='light'] .sl-markdown-content code.qf-error {
-	color: #d13b2e;
+.starlight-aside__title {
+	gap: 0.625rem;
+	font-size: 1rem;
+	font-weight: 700;
+	line-height: 1.5rem;
+}
+
+/* Tip ("Short answer"): gold, with the design's double-chevron icon. */
+.starlight-aside--tip {
+	--qf-tip: #d8ad38;
+	--sl-color-asides-text-accent: var(--qf-tip);
+	--sl-color-asides-border: var(--qf-tip);
+	background-color: rgb(216 173 56 / 0.2);
+}
+.starlight-aside--tip .starlight-aside__icon {
+	flex: none;
+	width: 2rem;
+	height: 2rem;
+	background: currentColor;
+	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3.33333 24V8L15.3333 16L3.33333 24ZM16.6667 24V8L28.6667 16L16.6667 24ZM6 19L10.5333 16L6 13V19ZM19.3333 19L23.8667 16L19.3333 13V19Z'/%3E%3C/svg%3E")
+		center / contain no-repeat;
+}
+.starlight-aside--tip .starlight-aside__icon path {
+	display: none;
+}
+
+/* --- Motion ------------------------------------------------------------- */
+
+/* Sliding current-item pill for the sidebar and table of contents (see Head.astro). */
+.qf-sidebar,
+starlight-toc nav {
+	position: relative;
+}
+.qf-sidebar {
+	--qf-indicator-bg: var(--qf-line);
+}
+starlight-toc nav {
+	--qf-indicator-bg: var(--qf-surface);
+}
+.qf-indicator {
+	position: absolute;
+	top: 0;
+	left: 0;
+	border-radius: 0.25rem;
+	background: var(--qf-indicator-bg);
+	pointer-events: none;
+	opacity: 0;
+}
+[data-qf-indicator] a {
+	position: relative;
+}
+/* The pill replaces the static highlight once the script is running. */
+[data-qf-indicator] [aria-current='page'],
+[data-qf-indicator] [aria-current='page']:hover,
+[data-qf-indicator] [aria-current='page']:focus {
+	background: none;
+}
+
+/* Theme switch: colours cross-fade only while `qf-theming` is set by the toggle. */
+@keyframes qf-spin-in {
+	from {
+		transform: rotate(-90deg) scale(0.6);
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.qf-indicator.is-ready {
+		transition: transform 0.18s ease, width 0.18s ease, height 0.18s ease, opacity 0.18s ease;
+	}
+	.sidebar-content a,
+	.right-sidebar a {
+		transition: color 0.15s ease;
+	}
+	.qf-theming,
+	.qf-theming *:not(.expressive-code, .expressive-code *, .scene-tree, .scene-tree *, img, svg, svg *) {
+		transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+	}
+	.qf-theming .sun,
+	.qf-theming .moon {
+		animation: qf-spin-in 0.3s ease;
+	}
 }
 
 .sl-markdown-content table {

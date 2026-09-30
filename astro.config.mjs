@@ -13,15 +13,13 @@ export default defineConfig({
 			title: 'Queue Free',
 			description: 'Short, practical answers to the most asked Godot 4 questions.',
 			lastUpdated: true,
+			// Fonts are declared in src/components/Head.astro.
 			customCss: [
-				'@fontsource/roboto/400.css',
-				'@fontsource/roboto/700.css',
-				'@fontsource/inter/800.css',
-				'@fontsource/jetbrains-mono/400.css',
 				'./src/styles/palette.css',
 				'./src/styles/theme.css',
 			],
 			components: {
+				Head: './src/components/Head.astro',
 				Header: './src/components/Header.astro',
 				SiteTitle: './src/components/SiteTitle.astro',
 				Sidebar: './src/components/Sidebar.astro',

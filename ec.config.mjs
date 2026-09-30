@@ -1,12 +1,12 @@
 import { defineEcConfig } from '@astrojs/starlight/expressive-code';
 import { pluginLineNumbers } from '@expressive-code/plugin-line-numbers';
-import { code, frame } from './src/styles/palette.mjs';
+import { dark, light } from './src/styles/palette.mjs';
 
 const scope = (scope, foreground) => ({ scope, settings: { foreground } });
 
-const godotTheme = {
-	name: 'godot-4-modern',
-	type: 'dark',
+const godotTheme = (name, type, { code, frame }) => ({
+	name,
+	type,
 	colors: {
 		'editor.background': frame.code,
 		'editor.foreground': code.default,
@@ -36,10 +36,13 @@ const godotTheme = {
 		),
 		scope(['meta.function.gdscript meta.literal.nodepath constant.character.escape'], code.string),
 	],
-};
+});
+
+// Style overrides take a function so each theme reads its own palette.
+const palette = ({ theme }) => (theme.type === 'light' ? light : dark);
 
 export default defineEcConfig({
-	themes: [godotTheme],
+	themes: [godotTheme('godot-4-modern', 'dark', dark), godotTheme('godot-4-light', 'light', light)],
 	minSyntaxHighlightingColorContrast: 0,
 	plugins: [pluginLineNumbers()],
 	defaultProps: {
@@ -54,23 +57,29 @@ export default defineEcConfig({
 		codeLineHeight: '1.5rem',
 		codePaddingBlock: '1rem',
 		codePaddingInline: '1rem',
-		borderColor: frame.border,
+		borderColor: (ctx) => palette(ctx).frame.border,
 		borderWidth: '2px',
 		borderRadius: '0.5rem',
 		frames: {
 			shadowColor: 'transparent',
-			editorBackground: frame.code,
-			editorTabBarBackground: frame.error,
-			editorActiveTabBackground: frame.code,
-			editorActiveTabForeground: code.default,
+			editorBackground: (ctx) => palette(ctx).frame.code,
+			editorTabBarBackground: (ctx) => palette(ctx).frame.error,
+			editorActiveTabBackground: (ctx) => palette(ctx).frame.code,
+			editorActiveTabForeground: (ctx) => palette(ctx).code.default,
 			editorActiveTabIndicatorTopColor: 'transparent',
 			editorActiveTabIndicatorBottomColor: 'transparent',
-			editorTabBarBorderBottomColor: frame.border,
-			terminalBackground: frame.code,
-			terminalTitlebarBackground: frame.error,
+			editorTabBarBorderBottomColor: (ctx) => palette(ctx).frame.border,
+			terminalBackground: (ctx) => palette(ctx).frame.code,
+			terminalTitlebarBackground: (ctx) => palette(ctx).frame.error,
 		},
 		lineNumbers: {
-			foreground: code.dim,
+			foreground: (ctx) => palette(ctx).code.dim,
+		},
+		textMarkers: {
+			// Right/wrong reads better than diff +/- for a tutorial. The glyphs are
+			// Material icons drawn as masks in theme.css; no text content here.
+			insDiffIndicatorContent: "''",
+			delDiffIndicatorContent: "''",
 		},
 	},
 });

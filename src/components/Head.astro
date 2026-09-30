@@ -1,0 +1,115 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro';
+import { ClientRouter } from 'astro:transitions';
+// Fontsource ships `font-display: swap`, which paints text in the fallback
+// font and then swaps, so every page load blinks. We re-emit its @font-face
+// rules with `block` instead. Importing the stylesheets as text keeps every
+// subset and unicode-range exactly as published.
+import roboto400 from '@fontsource/roboto/400.css?raw';
+import roboto700 from '@fontsource/roboto/700.css?raw';
+import inter800 from '@fontsource/inter/800.css?raw';
+import mono400 from '@fontsource/jetbrains-mono/400.css?raw';
+
+// Hashed URLs for every woff2 file, keyed by the path fontsource uses.
+const files: Record<string, string> = {
+	...import.meta.glob('/node_modules/@fontsource/roboto/files/*.woff2', { query: '?url', eager: true, import: 'default' }),
+	...import.meta.glob('/node_modules/@fontsource/inter/files/*.woff2', { query: '?url', eager: true, import: 'default' }),
+	...import.meta.glob('/node_modules/@fontsource/jetbrains-mono/files/*.woff2', {
+		query: '?url',
+		eager: true,
+		import: 'default',
+	}),
+};
+
+const resolve = (pkg: string, file: string) => {
+	const url = files[`/node_modules/@fontsource/${pkg}/files/${file}`];
+	if (!url) throw new Error(`Head: no font file for ${pkg}/${file}`);
+	return url;
+};
+
+const fontFace = (css: string, pkg: string) =>
+	css
+		.replace(/font-display: swap/g, 'font-display: block')
+		// Keep woff2 only; drop the legacy woff fallback.
+		.replace(/, url\(\.\/files\/[^)]+\.woff\) format\('woff'\)/g, '')
+		.replace(/url\(\.\/files\/([^)]+\.woff2)\)/g, (_, file) => `url(${resolve(pkg, file)})`);
+
+const css = [
+	fontFace(roboto400, 'roboto'),
+	fontFace(roboto700, 'roboto'),
+	fontFace(inter800, 'inter'),
+	fontFace(mono400, 'jetbrains-mono'),
+].join('\n');
+
+// Latin subsets are used on every page, so fetch them with the document.
+const preload = [
+	resolve('roboto', 'roboto-latin-400-normal.woff2'),
+	resolve('roboto', 'roboto-latin-700-normal.woff2'),
+	resolve('inter', 'inter-latin-800-normal.woff2'),
+	resolve('jetbrains-mono', 'jetbrains-mono-latin-400-normal.woff2'),
+];
+---
+
+<Default />
+<ClientRouter fallback="swap" />
+{preload.map((href) => <link rel="preload" as="font" type="font/woff2" href={href} crossorigin />)}
+<style is:inline set:html={css}></style>
+
+<script>
+	// The client router replaces every <html> attribute with the new page's,
+	// and the theme is only set by script, so put it back after each swap.
+	document.addEventListener('astro:after-swap', () => {
+		let theme: string | null = null;
+		try {
+			theme = localStorage.getItem('starlight-theme');
+		} catch {}
+		theme ??= matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+	});
+
+	// A pill that slides to the current item in the sidebar and the table of
+	// contents instead of the highlight jumping. Styled by `.qf-indicator`.
+	const tracked = new WeakSet<Element>();
+	const track = (container: Element | null, currentSelector: string) => {
+		if (!container) return;
+		let bar = container.querySelector<HTMLElement>(':scope > .qf-indicator');
+		if (!bar) {
+			bar = document.createElement('span');
+			bar.className = 'qf-indicator';
+			bar.setAttribute('aria-hidden', 'true');
+			container.prepend(bar);
+			container.setAttribute('data-qf-indicator', '');
+		}
+		const move = () => {
+			const link = container.querySelector<HTMLElement>(currentSelector);
+			if (!link) {
+				bar!.style.opacity = '0';
+				return;
+			}
+			const c = container.getBoundingClientRect();
+			const l = link.getBoundingClientRect();
+			bar!.style.opacity = '1';
+			bar!.style.transform = `translate(${l.left - c.left}px, ${l.top - c.top}px)`;
+			bar!.style.width = `${l.width}px`;
+			bar!.style.height = `${l.height}px`;
+		};
+		move();
+		// Place instantly, then enable sliding for later moves.
+		requestAnimationFrame(() => {
+			move();
+			bar!.classList.add('is-ready');
+		});
+		// The sidebar wrapper persists across navigations, so only observe it once.
+		if (tracked.has(container)) return;
+		tracked.add(container);
+		new MutationObserver(move).observe(container, { subtree: true, attributeFilter: ['aria-current'] });
+		new ResizeObserver(move).observe(container);
+	};
+	document.addEventListener('astro:page-load', () => {
+		// `.qf-sidebar` is the persisted element (see Sidebar.astro); attaching
+		// to it keeps the pill alive across page swaps so it slides rather than
+		// being recreated at the top.
+		track(document.querySelector('.qf-sidebar'), 'a[aria-current="page"]');
+		track(document.querySelector('starlight-toc nav'), 'a[aria-current="true"]');
+	});
+</script>
