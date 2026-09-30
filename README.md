@@ -15,7 +15,7 @@ Open http://localhost:4321.
 
 ## Add a tutorial
 
-1. Copy `templates/tutorial.md` into a category folder under `src/content/docs/`, for example `src/content/docs/movement/`.
+1. Copy `templates/how-to.mdx` (how do I...?) or `templates/error.mdx` (why does this error...?) into a category folder under `src/content/docs/`, for example `src/content/docs/movement/`.
 2. Save screenshots as `.webp` in `src/assets/<category>/`.
 3. For a new category, add a sidebar entry in `astro.config.mjs`.
 

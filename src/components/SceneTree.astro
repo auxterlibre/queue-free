@@ -1,0 +1,104 @@
+---
+interface SceneNode {
+	name: string;
+	type: string;
+	script: boolean;
+	unique: boolean;
+	note?: string;
+	children: SceneNode[];
+}
+
+interface Props {
+	tree?: string;
+	nodes?: SceneNode[];
+}
+
+function parse(text: string): SceneNode[] {
+	const lines = text.split('\n').filter((l) => l.trim());
+	const baseIndent = Math.min(...lines.map((l) => l.match(/^\s*/)![0].length));
+	const roots: SceneNode[] = [];
+	const stack: { depth: number; node: SceneNode }[] = [];
+	for (const line of lines) {
+		const m = line.match(/^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/);
+		if (!m) throw new Error(`SceneTree: can't read line "${line}"`);
+		const depth = (m[1].length - baseIndent) / 2;
+		const node = {
+			name: m[2],
+			type: m[3] ?? 'Node',
+			script: m[4].includes('[script]'),
+			unique: m[4].includes('[unique]'),
+			note: m[5],
+			children: [],
+		};
+		while (stack.length && stack[stack.length - 1].depth >= depth) stack.pop();
+		(stack.length ? stack[stack.length - 1].node.children : roots).push(node);
+		stack.push({ depth, node });
+	}
+	return roots;
+}
+
+const { tree, nodes = parse(tree ?? '') } = Astro.props;
+const icon = (name: string) => `/godot-editor-icons/${name}.svg`;
+---
+
+<ul class:list={[{ 'scene-tree': tree !== undefined }]} role={tree !== undefined ? 'tree' : 'group'}>
+	{
+		nodes.map((n) => (
+			<li role="treeitem">
+				<span class="row">
+					<img src={icon(n.type)} alt="" width="16" height="16" />
+					<span class="name">{n.name}</span>
+					<span class="type">{n.type}</span>
+					{n.unique && <img class="flag" src={icon('SceneUniqueName')} alt="unique name" title="Access as Unique Name (%)" width="16" height="16" />}
+					{n.script && <img class="script" src={icon('Script')} alt="has script" title="Has a script" width="16" height="16" />}
+					{n.note && <span class="note">{n.note}</span>}
+				</span>
+				{n.children.length > 0 && <Astro.self nodes={n.children} />}
+			</li>
+		))
+	}
+</ul>
+
+<style>
+	ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.scene-tree {
+		padding: 1rem;
+		border-radius: 0.5rem;
+		background: var(--qf-frame-tree);
+		font-size: var(--sl-text-sm);
+		color: var(--qf-code-default);
+		overflow-x: auto;
+	}
+	ul ul {
+		margin: 0 0 0 7px;
+		padding-left: 14px;
+		border-left: 1px solid #4a5160;
+	}
+	li {
+		margin: 0;
+	}
+	.row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.15rem 0;
+		white-space: nowrap;
+	}
+	.type {
+		color: #8a93a3;
+		font-size: var(--sl-text-xs);
+	}
+	.flag,
+	.script {
+		margin-left: 0.25rem;
+	}
+	.note {
+		margin-left: 0.75rem;
+		color: var(--qf-code-path);
+		font-style: italic;
+	}
+</style>

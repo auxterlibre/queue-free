@@ -1,0 +1,199 @@
+---
+title: Why is my node null?
+description: Fix "Invalid access to property or key on a base object of type null instance" and "Node not found" errors in Godot 4.
+godot: 4.x
+difficulty: Beginner
+sidebar:
+  label: My node is null
+---
+
+import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+Godot couldn't find the node when your code asked for it. Either the path is wrong, or your code ran before the node existed.
+</Aside>
+
+## The error
+
+You'll see one of these in the **Debugger** panel:
+
+<GodotError source="@implicit_ready()" message={`Node not found: "ScoreLabel" (relative to "/root/Main").`} />
+<GodotError source="_ready()" message={`Invalid access to property or key 'text' on a base object of type 'null instance'.`} />
+<GodotError source="_ready()" message={`Cannot call method 'show' on a null value.`} />
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The error includes `Node not found` | [1. The path is wrong](#1-the-path-is-wrong) |
+| The variable is declared at the top of the script with `$` | [2. Missing `@onready`](#2-missing-onready) |
+| It breaks right after you `instantiate()` a scene | [3. Used before `add_child`](#3-used-before-add_child) |
+| It works at first, then breaks during the game | [4. The node was freed](#4-the-node-was-freed) |
+| The variable uses `@export` | [5. Export not assigned](#5-export-not-assigned) |
+
+## The example scene
+
+All the fixes below use this scene. The script is on `Main`.
+
+<SceneTree tree={`
+  Main: Node2D [script] "script attached here"
+    Player: CharacterBody2D
+    UI: CanvasLayer
+      ScoreLabel: Label "the node we want"
+`} />
+
+## 1. The path is wrong
+
+`$` is a shortcut for `get_node()`. These two lines do exactly the same thing, so every fix on this page works for both:
+
+```gdscript
+$UI/ScoreLabel
+get_node("UI/ScoreLabel")
+```
+
+`UI/ScoreLabel` is a path **relative to the node the script is on**. It breaks if:
+
+- the name doesn't match exactly. Names are case-sensitive, so `$UI/scorelabel` fails.
+- you renamed the node, or moved it to a different parent.
+- the script is on a different node than you think.
+
+**Fix: let Godot write the path for you.** Hold <kbd>Ctrl</kbd> and drag the node from the Scene dock into the script editor. Godot writes the whole line with the correct path:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+extends Node2D
+
+@onready var score_label: Label = $UI/ScoreLabel
+
+func _ready() -> void:
+	score_label.text = "Score: 0"
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+    private Label _scoreLabel;
+
+    public override void _Ready()
+    {
+        _scoreLabel = GetNode<Label>("UI/ScoreLabel");
+        _scoreLabel.Text = "Score: 0";
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+### Better fix: use a unique name (`%`)
+
+Right-click `ScoreLabel` in the Scene dock → **Access as Unique Name**. A **%** icon appears next to it. Now you can find it by name alone, wherever it is in the scene:
+
+<SceneTree tree={`
+  Main: Node2D [script]
+    Player: CharacterBody2D
+    UI: CanvasLayer
+      TopBar: HBoxContainer
+        ScoreLabel: Label [unique] "moved into TopBar, still found"
+`} />
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd" del={1} ins={2}
+@onready var score_label: Label = $UI/ScoreLabel
+@onready var score_label: Label = %ScoreLabel
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs" del={1} ins={2}
+_scoreLabel = GetNode<Label>("UI/ScoreLabel");
+_scoreLabel = GetNode<Label>("%ScoreLabel");
+```
+
+</TabItem>
+</Tabs>
+
+Moving `ScoreLabel` into `TopBar` broke `$UI/ScoreLabel`, but `%ScoreLabel` still works. With `get_node()`, put the `%` inside the quotes: `get_node("%ScoreLabel")`.
+
+<Aside type="caution" title="Unique names only work inside their own scene">
+`%ScoreLabel` works from scripts in the scene where you marked it. If `Player` is a separate scene (`player.tscn`) with its own script, `%ScoreLabel` there returns `null`. To reach across scenes, use a signal, an `@export` variable, or a group.
+</Aside>
+
+## 2. Missing `@onready`
+
+Variables at the top of a script are set **before** the node's children exist. Without `@onready`, `$UI/ScoreLabel` runs too early and returns `null`:
+
+```gdscript del={1} ins={2}
+var score_label: Label = $UI/ScoreLabel
+@onready var score_label: Label = $UI/ScoreLabel
+```
+
+`@onready` waits until `_ready()`, when every child is in place.
+
+## 3. Used before `add_child`
+
+A scene you `instantiate()` isn't in the game until you call `add_child()`. Until then its `_ready()` hasn't run, so all its `@onready` variables are still `null`:
+
+```gdscript title="spawner.gd" del={5} ins={7}
+const ENEMY := preload("res://enemy.tscn")
+
+func spawn() -> void:
+	var enemy := ENEMY.instantiate()
+	enemy.set_health(50)
+	add_child(enemy)
+	enemy.set_health(50)
+```
+
+**Fix:** call `add_child()` first, then set things up.
+
+## 4. The node was freed
+
+After `queue_free()`, any variable still pointing at that node is broken. The error mentions a `previously freed` object. Check before using it:
+
+```gdscript
+if is_instance_valid(target):
+	target.take_damage(10)
+```
+
+## 5. Export not assigned
+
+`@export var target: Node2D` is `null` until you set it in the **Inspector**. Select the node and drag the target into the field. To catch it early, add an assert. The game then stops with a clear message instead of a confusing error later:
+
+```gdscript
+@export var target: Node2D
+
+func _ready() -> void:
+	assert(target != null, "Assign 'target' in the Inspector")
+```
+
+## Still stuck? Check the live scene tree
+
+<Steps>
+
+1. Read the end of the error: `(relative to "/root/Main")` shows where Godot started looking.
+
+2. Run the game. In the **Scene** dock, click **Remote** to see the scene tree as it is while the game runs.
+
+3. Find your node there and compare its real path and name with the one in your code.
+
+4. Still not sure? Add `print_tree_pretty()` to `_ready()` to print the tree to the Output panel.
+
+</Steps>
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Nodes and scene instances" description="Official docs on get_node and paths." href="https://docs.godotengine.org/en/stable/tutorials/scripting/nodes_and_scene_instances.html" />
+	<LinkCard title="Scene unique nodes" description="Official docs on % unique names." href="https://docs.godotengine.org/en/stable/tutorials/scripting/scene_unique_nodes.html" />
+</CardGrid>

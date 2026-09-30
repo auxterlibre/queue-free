@@ -1,0 +1,45 @@
+<qf-theme-toggle>
+	<button type="button" aria-label="Switch between dark and light theme">
+		<svg class="moon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+		</svg>
+		<svg class="sun" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+			<circle cx="12" cy="12" r="4"></circle>
+			<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+		</svg>
+	</button>
+</qf-theme-toggle>
+
+<script>
+	class QfThemeToggle extends HTMLElement {
+		constructor() {
+			super();
+			this.querySelector('button')?.addEventListener('click', () => {
+				const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+				document.documentElement.dataset.theme = next;
+				try {
+					localStorage.setItem('starlight-theme', next);
+				} catch {}
+			});
+		}
+	}
+	customElements.define('qf-theme-toggle', QfThemeToggle);
+</script>
+
+<style>
+	button {
+		display: flex;
+		padding: 0;
+		border: none;
+		background: none;
+		color: var(--qf-text);
+		cursor: pointer;
+	}
+	.sun,
+	:global(:root[data-theme='light']) .moon {
+		display: none;
+	}
+	:global(:root[data-theme='light']) .sun {
+		display: block;
+	}
+</style>

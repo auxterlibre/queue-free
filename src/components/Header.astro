@@ -1,0 +1,28 @@
+---
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+---
+
+<div class="qf-header">
+	<SiteTitle />
+	<div class="theme print:hidden">
+		<ThemeSelect />
+	</div>
+</div>
+
+<style>
+	.qf-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		height: 100%;
+	}
+	.theme {
+		display: none;
+	}
+	@media (min-width: 50rem) {
+		.theme {
+			display: flex;
+		}
+	}
+</style>

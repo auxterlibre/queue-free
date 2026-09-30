@@ -1,0 +1,42 @@
+---
+interface Props {
+	source?: string;
+	message: string;
+}
+
+const { source, message } = Astro.props;
+---
+
+<div class="godot-error">
+	<span class="dot" aria-hidden="true"></span>
+	<span class="message">
+		{source ? `${source}: ${message}` : message}
+	</span>
+</div>
+
+<style>
+	.godot-error {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 1rem;
+		border: 2px solid var(--qf-frame-border);
+		border-radius: 0.5rem;
+		background: var(--qf-frame-error);
+		color: var(--qf-code-error);
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.875rem;
+		line-height: 1.5rem;
+	}
+	.dot {
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		margin-top: 0.5rem;
+		border-radius: 50%;
+		background: var(--qf-code-error);
+	}
+	.message {
+		overflow-wrap: anywhere;
+	}
+</style>

@@ -3,6 +3,9 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
+    "palette": "node src/styles/palette-css.mjs",
+    "predev": "npm run palette",
+    "prebuild": "npm run palette",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
@@ -10,7 +13,12 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/markdown-remark": "^7.3.1",
     "@astrojs/starlight": "^0.42.4",
+    "@expressive-code/plugin-line-numbers": "^0.44.2",
+    "@fontsource/inter": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/roboto": "^5.3.0",
     "astro": "^7.2.10",
     "sharp": "^0.35.3"
   },

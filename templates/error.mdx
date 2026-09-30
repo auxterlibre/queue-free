@@ -1,0 +1,63 @@
+---
+title: Why does ...?
+description: Fix "EXACT ERROR TEXT" in Godot 4. Include the error words people search for.
+godot: 4.x
+difficulty: Beginner
+sidebar:
+  label: Short sidebar name
+---
+
+import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+The cause and fix in one or two sentences.
+</Aside>
+
+## The error
+
+<GodotError source="_ready()" message={`The exact error text from the Debugger panel.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| Symptom the reader can check | [1. First cause](#1-first-cause) |
+| Another symptom | [2. Second cause](#2-second-cause) |
+
+## The example scene
+
+<SceneTree tree={`
+  Main: Node2D [script]
+    Child: Label
+`} />
+
+## 1. First cause
+
+Why it happens, in plain words.
+
+```gdscript title="main.gd" del={1} ins={2}
+wrong_line()
+right_line()
+```
+
+## 2. Second cause
+
+Why it happens, and the fix.
+
+## Still stuck?
+
+<Steps>
+
+1. First thing to check.
+
+2. Second thing to check.
+
+</Steps>
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Page title" description="What it covers." href="/category/page/" />
+</CardGrid>

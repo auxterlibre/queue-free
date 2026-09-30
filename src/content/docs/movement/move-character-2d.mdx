@@ -1,0 +1,72 @@
+---
+title: How do I move a character in 2D?
+description: Move a CharacterBody2D with the arrow keys or WASD in Godot 4, with collisions.
+godot: 4.x
+difficulty: Beginner
+sidebar:
+  label: Move a character (2D)
+---
+
+**Short answer:** use a `CharacterBody2D`. In `_physics_process`, set its `velocity`, then call `move_and_slide()`.
+
+## 1. Set up the scene
+
+Create a new scene with this structure:
+
+```
+Player (CharacterBody2D)
+├── Sprite2D
+└── CollisionShape2D
+```
+
+- Give the `Sprite2D` a texture. The default `icon.svg` is fine for now.
+- Give the `CollisionShape2D` a shape in the Inspector, such as a `RectangleShape2D` or `CapsuleShape2D`, and resize it to fit the sprite.
+
+## 2. Add the script
+
+Attach a script to `Player`:
+
+```gdscript
+extends CharacterBody2D
+
+const SPEED := 300.0
+
+func _physics_process(_delta: float) -> void:
+	var direction := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+	velocity = direction * SPEED
+	move_and_slide()
+```
+
+Run the scene. The arrow keys now move the player in 8 directions, and it stops at walls instead of passing through them.
+
+`Input.get_vector` returns a vector with a length of 1 or less, so moving diagonally isn't faster than moving straight.
+
+## 3. Use WASD too (optional)
+
+Open **Project → Project Settings → Input Map** and add your own actions: `move_left`, `move_right`, `move_up`, `move_down`. Assign both the arrow keys and WASD to them, then use those names in `get_vector`:
+
+```gdscript
+var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+```
+
+## Common mistakes
+
+:::caution[Multiplying by delta]
+`move_and_slide()` already takes the frame time into account. `velocity = direction * SPEED * delta` makes the character crawl.
+:::
+
+:::caution[Godot 3 code]
+Old tutorials use `move_and_slide(velocity)` and `KinematicBody2D`. In Godot 4, `velocity` is a property you set, `move_and_slide()` takes no arguments, and the node is called `CharacterBody2D`.
+:::
+
+:::caution[Changing position directly]
+`position += direction * SPEED * delta` moves the node but skips collision checks, so the character goes through walls.
+:::
+
+:::caution[Warning icon on the node]
+A yellow warning next to `Player` means the `CollisionShape2D` is missing or has no shape. Without one, nothing collides.
+:::
+
+:::caution[Using _process]
+Put movement in `_physics_process`, not `_process`. Otherwise it can jitter and collide inconsistently.
+:::

@@ -1,0 +1,69 @@
+---
+title: How do I ...?
+description: One sentence that says what the reader will be able to do.
+godot: 4.x
+difficulty: Beginner
+sidebar:
+  label: Short sidebar name
+---
+
+import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+
+<Aside type="tip" title="Short answer">
+The answer in one or two sentences.
+</Aside>
+
+## Set up the scene
+
+<SceneTree tree={`
+  Main: Node2D [script]
+    Child: Sprite2D
+`} />
+
+<Steps>
+
+1. First thing to do in the editor.
+
+   ![What the reader should see](../../../assets/CATEGORY/IMAGE-NAME.webp)
+
+2. Second thing to do.
+
+</Steps>
+
+## Add the script
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+extends Node2D
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+}
+```
+
+</TabItem>
+</Tabs>
+
+What happens when you run it.
+
+## Common mistakes
+
+:::caution[Name of the mistake]
+What goes wrong, and how to fix it.
+:::
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Page title" description="What it covers." href="/category/page/" />
+</CardGrid>

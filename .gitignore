@@ -2,6 +2,8 @@
 dist/
 # generated types
 .astro/
+# generated from palette.mjs
+src/styles/palette.css
 
 # dependencies
 node_modules/
