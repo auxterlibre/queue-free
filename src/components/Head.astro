@@ -105,11 +105,48 @@ const preload = [
 		new MutationObserver(move).observe(container, { subtree: true, attributeFilter: ['aria-current'] });
 		new ResizeObserver(move).observe(container);
 	};
+	// Wraps Starlight's `current` setter: a click pins its entry until the reader scrolls, and the page bottom selects the last entry.
+	const tameToc = async (toc: HTMLElement | null) => {
+		if (!toc || tracked.has(toc)) return;
+		tracked.add(toc);
+		await customElements.whenDefined('starlight-toc');
+		const proto = Object.getPrototypeOf(toc);
+		const setCurrent = Object.getOwnPropertyDescriptor(proto, 'current')?.set;
+		if (!setCurrent) return;
+		const links = [...toc.querySelectorAll('a')];
+		const last = links[links.length - 1];
+		const atBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+		let pinned = false;
+		Object.defineProperty(toc, 'current', {
+			set(link: Element) {
+				if (pinned) return;
+				setCurrent.call(this, atBottom() && last ? last : link);
+			},
+		});
+		for (const link of links) {
+			link.addEventListener('click', () => {
+				pinned = false;
+				setCurrent.call(toc, link);
+				pinned = true;
+			});
+		}
+		const unpin = () => {
+			pinned = false;
+			if (atBottom() && last) setCurrent.call(toc, last);
+		};
+		window.addEventListener('wheel', unpin, { passive: true });
+		window.addEventListener('touchmove', unpin, { passive: true });
+		window.addEventListener('keydown', (e) => {
+			if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(e.key)) unpin();
+		});
+	};
+
 	document.addEventListener('astro:page-load', () => {
 		// `.qf-sidebar` is the persisted element (see Sidebar.astro); attaching
 		// to it keeps the pill alive across page swaps so it slides rather than
 		// being recreated at the top.
 		track(document.querySelector('.qf-sidebar'), 'a[aria-current="page"]');
 		track(document.querySelector('starlight-toc nav'), 'a[aria-current="true"]');
+		tameToc(document.querySelector('starlight-toc'));
 	});
 </script>
