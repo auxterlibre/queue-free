@@ -1,0 +1,184 @@
+---
+title: How do I connect a signal in code?
+description: Connect built-in and custom signals from a script in Godot 4, with the handler written by hand.
+godot: 4.x
+sidebar:
+  label: Connect a signal
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+
+<Aside type="tip" title="Short answer">
+`$Button.pressed.connect(_on_button_pressed)`: the signal, `.connect`, and the function itself without parentheses.
+</Aside>
+
+## Connect a built-in signal
+
+The script sits on `Main`, and the button is its child:
+
+<SceneTree tree={`
+  Main: Node2D [script] "the script goes here"
+    Button: Button
+`} />
+
+In `_ready()`, take the signal, call `.connect()` on it, and hand it the function that should run. You pass the function itself, not a call to it, so there are no parentheses after its name:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+extends Node2D
+
+func _ready() -> void:
+	$Button.pressed.connect(_on_button_pressed)
+
+func _on_button_pressed() -> void:
+	print("Button pressed")
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+    public override void _Ready()
+    {
+        GetNode<Button>("Button").Pressed += OnButtonPressed;
+    }
+
+    private void OnButtonPressed()
+    {
+        GD.Print("Button pressed");
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+Run the scene and click the button. Every click prints a line, with nothing set up in the editor.
+
+## Signals that pass arguments
+
+Some signals send data along. `Area2D.body_entered` tells you which body came in, so the handler takes that body as a parameter:
+
+```gdscript title="main.gd"
+func _ready() -> void:
+	$Area2D.body_entered.connect(_on_body_entered)
+
+func _on_body_entered(body: Node2D) -> void:
+	print(body.name, " entered")
+```
+
+The handler must take the same parameters the signal sends, in the same order. To see what a signal sends, select the node, open the **Node → Signals** dock and read the signature next to its name. If you want to pass something extra of your own, add it with `.bind()`: `$Area2D.body_entered.connect(_on_body_entered.bind("left"))` makes the handler receive `body` and then `"left"`.
+
+## Make your own signal
+
+Declare the signal at the top of the script with the parameters it will send, then call `.emit()` where the value changes:
+
+<SceneTree tree={`
+  Main: Node2D [script] "connects to the signal"
+    Player: CharacterBody2D [script] "owns and emits the signal"
+`} />
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="player.gd"
+extends CharacterBody2D
+
+signal health_changed(new_health: int)
+
+var health := 100
+
+func take_damage(amount: int) -> void:
+	health -= amount
+	health_changed.emit(health)
+```
+
+```gdscript title="main.gd"
+extends Node2D
+
+func _ready() -> void:
+	$Player.health_changed.connect(_on_player_health_changed)
+
+func _on_player_health_changed(new_health: int) -> void:
+	print("Health: ", new_health)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Player.cs"
+using Godot;
+
+public partial class Player : CharacterBody2D
+{
+    [Signal]
+    public delegate void HealthChangedEventHandler(int newHealth);
+
+    private int _health = 100;
+
+    public void TakeDamage(int amount)
+    {
+        _health -= amount;
+        EmitSignal(SignalName.HealthChanged, _health);
+    }
+}
+```
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+    public override void _Ready()
+    {
+        GetNode<Player>("Player").HealthChanged += OnPlayerHealthChanged;
+    }
+
+    private void OnPlayerHealthChanged(int newHealth)
+    {
+        GD.Print($"Health: {newHealth}");
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+Notice the direction. `Player` owns the signal and emits it without knowing who is listening. `Main`, the node above, connects to it. The child never reaches up to its parent, so you can drop `Player` into any scene and it still works.
+
+## Common mistakes
+
+:::note[Calling the function instead of passing it]
+Parentheses run the function right there and hand its return value, `null`, to `connect()`. Drop them:
+
+```gdscript del={1} ins={2}
+$Button.pressed.connect(_on_button_pressed())
+$Button.pressed.connect(_on_button_pressed)
+```
+:::
+
+:::note[Wrong number of parameters]
+If the signal sends one argument and your handler takes none, Godot reports a method call error the moment it fires. Match the handler's parameters to the signature shown in the Node → Signals dock.
+:::
+
+:::note[Connecting twice]
+Connecting the same signal to the same function again raises an error; see [Why does it say the signal is already connected?](/errors/signal-already-connected/).
+:::
+
+:::note[Reaching up with get_parent()]
+`get_parent().some_signal.connect(...)` or `get_parent().do_something()` ties the child to one specific parent, so it breaks as soon as you reuse the scene. Emit a signal from the child and let the parent connect.
+:::
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Why does it say the signal is already connected?" description="Fix the error from connecting the same signal twice." href="/errors/signal-already-connected/" />
+	<LinkCard title="Using signals" description="Official step-by-step introduction to signals." href="https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html" />
+</CardGrid>

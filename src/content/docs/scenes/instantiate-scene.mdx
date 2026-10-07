@@ -1,0 +1,123 @@
+---
+title: How do I spawn a scene from code?
+description: Instantiate a saved scene such as an enemy or a bullet while the game runs, and place it where you want in Godot 4.
+godot: 4.x
+sidebar:
+  label: Spawn a scene
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+
+<Aside type="tip" title="Short answer">
+`preload()` the scene, call `instantiate()` on it, `add_child()` the result, then set its `position`.
+</Aside>
+
+## Set up the scene
+
+The spawning happens in the level. The `Marker2D` is just a point you can move around in the editor to say where things appear:
+
+<SceneTree tree={`
+  Level: Node2D [script] "the script goes here"
+    Spawner: Marker2D "where the enemy appears"
+`} />
+
+The thing being spawned is its own saved scene, `enemy.tscn`:
+
+<SceneTree tree={`
+  Enemy: CharacterBody2D
+    Sprite2D: Sprite2D
+    CollisionShape2D: CollisionShape2D
+`} />
+
+## Load the scene once
+
+At the top of `level.gd`, load the enemy scene into a constant. This gives you a `PackedScene`, a recipe you can make as many copies of as you like:
+
+```gdscript title="level.gd"
+extends Node2D
+
+const ENEMY := preload("res://enemy.tscn")
+```
+
+`preload()` loads the file when the script is parsed, so the path must be a literal string; use `load("res://enemy.tscn")` instead when you only know the path at runtime.
+
+## Create and add an instance
+
+`instantiate()` builds a fresh copy of the scene. It exists in memory only until you `add_child()` it, which is what puts it in the running game:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="level.gd"
+extends Node2D
+
+const ENEMY := preload("res://enemy.tscn")
+
+func spawn_enemy() -> void:
+	var enemy := ENEMY.instantiate()
+	enemy.position = $Spawner.position
+	add_child(enemy)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Level.cs"
+using Godot;
+
+public partial class Level : Node2D
+{
+    private PackedScene _enemyScene = GD.Load<PackedScene>("res://enemy.tscn");
+
+    public void SpawnEnemy()
+    {
+        Enemy enemy = _enemyScene.Instantiate<Enemy>();
+        enemy.Position = GetNode<Marker2D>("Spawner").Position;
+        AddChild(enemy);
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+Call `spawn_enemy()` from a button, a timer, or `_ready()` to test it. Each call creates a new enemy at the marker. Drag `Spawner` around in the editor and the spawn point follows.
+
+## Where to add it
+
+Add the instance to the level, or to a plain container node inside it, not to something that moves. A bullet added as a child of the player drifts along with the player instead of flying straight. If the spawning script lives on a moving node, hand the instance up with `get_parent().add_child(enemy)`, or expose the target so you can pick it in the Inspector:
+
+```gdscript title="gun.gd"
+@export var container: Node2D
+
+func shoot() -> void:
+	var bullet := BULLET.instantiate()
+	bullet.global_position = global_position
+	container.add_child(bullet)
+```
+
+## Common mistakes
+
+:::note[Forgetting add_child]
+`instantiate()` alone doesn't show anything. Without `add_child()` the node never enters the tree, so it's never drawn or updated.
+:::
+
+:::note[Setting up the instance before add_child]
+Anything in the enemy script that relies on `@onready` is still `null` until the enemy is in the tree. Call `add_child()` first, then call its functions, otherwise you get the error described in [Why is my node null?](/errors/node-is-null/).
+:::
+
+:::note[Spawning in _process without a timer]
+`_process()` runs every frame, so `spawn_enemy()` in there creates hundreds of enemies a second. Spawn from a `Timer` node's `timeout` signal or on a key press instead.
+:::
+
+:::note[Calling instantiate on the path]
+`"res://enemy.tscn".instantiate()` fails, because a string isn't a scene. Call `instantiate()` on the `PackedScene` you got from `preload()` or `load()`.
+:::
+
+## Related
+
+<CardGrid>
+	<LinkCard title="How do I change scenes?" description="Replace the whole current scene with another one." href="/scenes/change-scene/" />
+	<LinkCard title="Nodes and scene instances" description="Official docs on instantiating scenes from code." href="https://docs.godotengine.org/en/stable/tutorials/scripting/nodes_and_scene_instances.html" />
+</CardGrid>

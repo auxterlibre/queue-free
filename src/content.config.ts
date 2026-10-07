@@ -9,7 +9,6 @@ export const collections = {
 		schema: docsSchema({
 			extend: z.object({
 				godot: z.string().optional(),
-				difficulty: z.enum(['Beginner', 'Intermediate', 'Advanced']).optional(),
 			}),
 		}),
 	}),

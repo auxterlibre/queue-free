@@ -1,0 +1,139 @@
+---
+import '@pagefind/default-ui/css/ui.css';
+
+const { title } = Astro.locals.starlightRoute.entry.data.hero ?? {};
+---
+
+<section class="qf-hero">
+	<h1>{title}</h1>
+	{
+		import.meta.env.DEV ? (
+			<input class="dev-search" type="search" placeholder="Search (works in the built site)" disabled />
+		) : (
+			<div id="qf-search" />
+		)
+	}
+</section>
+
+<script>
+	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';
+
+	const mount = async () => {
+		const el = document.getElementById('qf-search');
+		if (!el || el.children.length) return;
+		const { PagefindUI } = await import('@pagefind/default-ui');
+		new PagefindUI({
+			...pagefindUserConfig,
+			element: el,
+			baseUrl: import.meta.env.BASE_URL,
+			bundlePath: import.meta.env.BASE_URL.replace(/\/$/, '') + '/pagefind/',
+			showImages: false,
+			showSubResults: true,
+			autofocus: true,
+		});
+	};
+
+	document.addEventListener('astro:page-load', mount);
+
+	window.addEventListener(
+		'keydown',
+		(e) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+				const input = document.querySelector<HTMLInputElement>('#qf-search input');
+				if (!input) return;
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				input.focus();
+			}
+		},
+		true,
+	);
+</script>
+
+<style>
+	.qf-hero {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		max-width: 35rem;
+		margin-inline: auto;
+		padding-block: 2rem 0;
+	}
+	.qf-hero h1 {
+		margin: 0;
+		font-size: 2rem;
+		font-weight: 700;
+		line-height: 1.2;
+		text-align: center;
+		background: linear-gradient(to bottom, var(--qf-text), var(--qf-muted));
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.dev-search,
+	#qf-search {
+		--pagefind-ui-scale: 0.75;
+		--pagefind-ui-primary: var(--qf-text);
+		--pagefind-ui-text: var(--qf-text);
+		--pagefind-ui-background: var(--qf-surface);
+		--pagefind-ui-border: transparent;
+		--pagefind-ui-border-width: 0px;
+		--pagefind-ui-border-radius: 0.25rem;
+		--pagefind-ui-tag: var(--qf-line);
+		--pagefind-ui-font: var(--sl-font);
+	}
+	.qf-hero .dev-search {
+		height: 3rem;
+		padding-inline: 1rem;
+		border: 0;
+		border-radius: 0.25rem;
+		background: var(--qf-surface);
+		color: var(--qf-muted);
+		font: inherit;
+	}
+	#qf-search :global(.pagefind-ui__search-input) {
+		font-weight: 400;
+		color: var(--qf-text);
+	}
+	#qf-search :global(.pagefind-ui__search-input::placeholder) {
+		color: var(--qf-muted);
+		opacity: 1;
+	}
+	#qf-search :global(.pagefind-ui__search-input:focus) {
+		outline: 1px solid var(--qf-line);
+	}
+	#qf-search :global(.pagefind-ui__search-clear) {
+		background: transparent;
+		color: var(--qf-muted);
+	}
+	#qf-search :global(.pagefind-ui__message) {
+		color: var(--qf-muted);
+	}
+	#qf-search :global(.pagefind-ui__result) {
+		border-color: var(--qf-line);
+	}
+	#qf-search :global(.pagefind-ui__result-link) {
+		color: var(--qf-text);
+	}
+	#qf-search :global(.pagefind-ui__result-link:hover) {
+		color: var(--qf-link);
+		text-decoration: none;
+	}
+	#qf-search :global(.pagefind-ui__result-excerpt) {
+		color: var(--qf-muted);
+	}
+	#qf-search :global(mark) {
+		background: var(--qf-tag);
+		color: var(--qf-text);
+	}
+	#qf-search :global(.pagefind-ui__button) {
+		background: var(--qf-surface);
+		border-color: var(--qf-line);
+		color: var(--qf-text);
+	}
+	@media (min-width: 50rem) {
+		.qf-hero {
+			padding-block: 3rem 0;
+		}
+	}
+</style>

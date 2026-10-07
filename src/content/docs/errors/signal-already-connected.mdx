@@ -1,0 +1,144 @@
+---
+title: Why does it say the signal is already connected?
+description: Fix "Signal 'pressed' is already connected to given callable" and "Attempt to disconnect a nonexistent connection" in Godot 4.
+godot: 4.x
+sidebar:
+  label: Signal already connected
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+A signal can only be connected to the same function once. You connected it twice, usually once in the editor and once in code, or in a function that runs more than once. Pick one place and connect there.
+</Aside>
+
+## The error
+
+You'll see something like one of these in the **Debugger** panel. The signal, node and function names will be your own:
+
+<GodotError source="_ready()" message={`Signal 'pressed' is already connected to given callable 'Node(main.gd)::_on_button_pressed' in that object.`} />
+<GodotError source="_exit_tree()" message={`Attempt to disconnect a nonexistent connection from 'Button'. Signal: 'pressed', callable: 'Node(main.gd)::_on_button_pressed'.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The signal has a green icon next to it in the **Node** dock, and you also call `connect()` in code | [Connected twice](#connected-twice) |
+| The `connect()` line is in `_process`, a button handler, or a node that is removed and added again | [Connecting more than once](#connecting-more-than-once) |
+| The error says `nonexistent connection` | [Disconnecting what was never connected](#disconnecting-what-was-never-connected) |
+
+## The example scene
+
+The script is on `Main`. It listens for the button's `pressed` signal.
+
+<SceneTree tree={`
+  Main: Node2D [script] "connects to Button.pressed"
+    Button: Button
+`} />
+
+## Connected twice
+
+There are two ways to connect a signal, and doing both is the most common cause. The first is the editor: select `Button`, open the **Node** dock next to the Inspector, double-click `pressed` and pick `_on_button_pressed`. Godot then shows a green icon next to the signal. The second is code:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+extends Node2D
+
+func _ready() -> void:
+	$Button.pressed.connect(_on_button_pressed)
+
+func _on_button_pressed() -> void:
+	print("pressed")
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+    public override void _Ready()
+    {
+        GetNode<Button>("Button").Pressed += OnButtonPressed;
+    }
+
+    private void OnButtonPressed()
+    {
+        GD.Print("pressed");
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+If the green icon is there and this code is also there, the signal is connected twice and Godot complains at the second one.
+
+**Fix: keep one.** Code is usually the better choice, because you can read it without clicking through the editor. To remove the editor connection, select `Button`, open the **Node** dock, right-click the connection under `pressed` and choose **Disconnect**. If you'd rather keep the editor connection, delete the `connect()` line instead.
+
+## Connecting more than once
+
+`connect()` is not something you do every frame or every time something happens. It's a one-time setup step. Each of these runs more than once, so the second time through it hits an existing connection:
+
+```gdscript title="main.gd" del={1,2}
+func _process(delta: float) -> void:
+	$Button.pressed.connect(_on_button_pressed)
+```
+
+The same thing happens when you connect inside a signal handler, or in the `_ready()` of a node that you `remove_child()` and `add_child()` again, since `_ready()` only runs once but the connection from the first time is still there.
+
+**Fix: connect once, in `_ready()`.** If the connection really might already exist, check first:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+func _ready() -> void:
+	if not $Button.pressed.is_connected(_on_button_pressed):
+		$Button.pressed.connect(_on_button_pressed)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+public override void _Ready()
+{
+    var button = GetNode<Button>("Button");
+    if (!button.IsConnected(Button.SignalName.Pressed, Callable.From(OnButtonPressed)))
+        button.Pressed += OnButtonPressed;
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Disconnecting what was never connected
+
+The second error is the mirror image. `disconnect()` asks Godot to remove a connection, and it complains if there isn't one. That happens when the connection was made in the editor rather than in code, when `disconnect()` runs twice, or when you disconnect in `_exit_tree()` after the node was already cleaned up.
+
+```gdscript title="main.gd" del={2} ins={3,4}
+func _exit_tree() -> void:
+	$Button.pressed.disconnect(_on_button_pressed)
+	if $Button.pressed.is_connected(_on_button_pressed):
+		$Button.pressed.disconnect(_on_button_pressed)
+```
+
+Most of the time you don't need to disconnect at all. When a node is freed, every connection to and from it goes with it. Only disconnect when both nodes keep living and you genuinely want to stop listening.
+
+## Still stuck?
+
+Click the error in the **Debugger** panel and look at the stack trace underneath. It lists the exact line that tried to connect, and the lines that called it, so you can see which path ran twice. If the trace only shows one `connect()` and the editor shows no green icon, print `$Button.pressed.get_connections()` in `_ready()`. It lists every connection on that signal, with the function each one points at, so you can see where the first one came from.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="How do I connect a signal in code?" description="The connect() call, lambdas, and passing extra arguments." href="/signals/connect-signal-in-code/" />
+	<LinkCard title="Using signals" description="Official step-by-step guide to signals." href="https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html" />
+</CardGrid>

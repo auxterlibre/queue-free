@@ -26,3 +26,29 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 		}
 	}
 </style>
+
+<script>
+	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';
+
+	document.addEventListener('astro:after-swap', async () => {
+		if (import.meta.env.DEV) return;
+		for (const search of document.querySelectorAll<HTMLElement>('site-search')) {
+			const mount = search.querySelector('#starlight__search');
+			if (!mount || mount.children.length) continue;
+			let translations = {};
+			try {
+				translations = JSON.parse(search.dataset.translations || '{}');
+			} catch {}
+			const { PagefindUI } = await import('@pagefind/default-ui');
+			new PagefindUI({
+				...pagefindUserConfig,
+				element: mount,
+				baseUrl: import.meta.env.BASE_URL,
+				bundlePath: import.meta.env.BASE_URL.replace(/\/$/, '') + '/pagefind/',
+				showImages: false,
+				translations,
+				showSubResults: true,
+			});
+		}
+	});
+</script>

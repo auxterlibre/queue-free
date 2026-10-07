@@ -1,0 +1,143 @@
+---
+title: Why do I get "Nonexistent function"?
+description: Fix "Invalid call. Nonexistent function 'X' in base 'Node2D'" in Godot 4. The function exists, but you're calling it on the wrong node.
+godot: 4.x
+sidebar:
+  label: Nonexistent function
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+The node you're calling the function on doesn't have it. Read the end of the error: `in base 'TileMapLayer'` tells you which node Godot actually tried. It's usually not the one you meant.
+</Aside>
+
+## The error
+
+You'll see something like one of these in the **Debugger** panel. The function and node names will be your own:
+
+<GodotError source="_on_body_entered()" message={`Invalid call. Nonexistent function 'take_damage' in base 'TileMapLayer'.`} />
+<GodotError source="spawn()" message={`Invalid call. Nonexistent function 'set_target' in base 'PackedScene'.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The base is a node you didn't expect, like `TileMapLayer` or `StaticBody2D` | [The wrong node got the call](#the-wrong-node-got-the-call) |
+| The base is `PackedScene` | [Calling the scene instead of the instance](#calling-the-scene-instead-of-the-instance) |
+| The base is your node and the function is right there in the script | [The script isn't on that node](#the-script-isnt-on-that-node) |
+| Everything looks right | [A typo](#a-typo) |
+
+## The example scene
+
+The player has a `take_damage()` function. The enemy is an `Area2D` that calls it on whatever enters.
+
+<SceneTree tree={`
+  Main: Node2D
+    Player: CharacterBody2D [script] "has take_damage()"
+    Enemy: Area2D [script] "calls take_damage()"
+    Walls: TileMapLayer
+`} />
+
+## The wrong node got the call
+
+The variable holds a different node than you think. Here, `body` is whatever touched the enemy. Most of the time that's the player, but when the enemy touches the walls, `body` is the `TileMapLayer`, and a `TileMapLayer` has no `take_damage()`:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="enemy.gd"
+extends Area2D
+
+func _on_body_entered(body: Node2D) -> void:
+	body.take_damage(10)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Enemy.cs"
+using Godot;
+
+public partial class Enemy : Area2D
+{
+    private void OnBodyEntered(Node2D body)
+    {
+        ((Player)body).TakeDamage(10);
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Fix: check before you call.**
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="enemy.gd" del={2} ins={3,4}
+func _on_body_entered(body: Node2D) -> void:
+	body.take_damage(10)
+	if body.has_method("take_damage"):
+		body.take_damage(10)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Enemy.cs" del={3} ins={4,5}
+private void OnBodyEntered(Node2D body)
+{
+    ((Player)body).TakeDamage(10);
+    if (body is Player player)
+        player.TakeDamage(10);
+}
+```
+
+</TabItem>
+</Tabs>
+
+`get_parent()` causes the same surprise. It returns whatever the parent is right now, so moving a script to a different node silently changes what `get_parent()` points at.
+
+## Calling the scene instead of the instance
+
+A `PackedScene` is the blueprint. It has no `take_damage()` and no `position`. You need to `instantiate()` it first, then call things on the result:
+
+```gdscript title="spawner.gd" del={4} ins={5,6}
+const ENEMY := preload("res://enemy.tscn")
+
+func spawn() -> void:
+	ENEMY.set_target(player)
+	var enemy := ENEMY.instantiate()
+	enemy.set_target(player)
+	add_child(enemy)
+```
+
+## The script isn't on that node
+
+The function is in `player.gd`, but `player.gd` has to be attached to the node you're calling. Select the node in the Scene dock and look at the script icon on the right of its name. If it's missing, or shows a different file, that's the problem. It often happens after duplicating a scene or dragging a script onto the wrong node.
+
+If the node is an instance of another scene (`player.tscn`), the script lives in that scene. Open it and check there.
+
+## A typo
+
+Function names are case-sensitive and exact: `take_damage`, `takeDamage` and `take_dmg` are three different functions. Copy the name from the definition rather than retyping it. The script editor underlines calls it can't resolve on nodes with a known type, so give your variables types where you can:
+
+```gdscript del={1} ins={2}
+var player = $Player
+var player: Player = $Player
+```
+
+## Still stuck?
+
+The error names the base node's **class**, not its name. If it says `in base 'Node2D'`, work out which `Node2D` that is: put `print(body.name)` or `print(body.get_path())` on the line above the call and run again. Once you know which node it is, the fix is usually obvious.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Why is my node null?" description="The other half of this problem: the node wasn't found at all." href="/errors/node-is-null/" />
+	<LinkCard title="Object.has_method()" description="Official reference for checking a function exists before calling it." href="https://docs.godotengine.org/en/stable/classes/class_object.html#class-object-method-has-method" />
+</CardGrid>

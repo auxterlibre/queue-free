@@ -23,8 +23,12 @@ export const dark = {
 		error: '#1f1f1f',
 		tree: '#292929',
 		border: '#292929',
+		borderWidth: '2px',
 		line: '#4a5160',
 		muted: '#8a93a3',
+		note: '#d8ad38',
+		tip: '#41f3b9',
+		tipBg: '#1d4135',
 	},
 };
 
@@ -37,7 +41,7 @@ export const light = {
 		annotation: '#cc8040',
 		keyword: '#e62282',
 		baseType: '#009933',
-		error: '#bf5a50',
+		error: '#ff786b',
 		dim: '#7d7d7d',
 		symbol: '#00009c',
 		controlFlow: '#bd1fcc',
@@ -47,10 +51,14 @@ export const light = {
 	},
 	frame: {
 		code: '#e6e6e6',
-		error: '#dcdcdc',
+		error: '#f0f0f0',
 		tree: '#ebebeb',
-		border: '#d9d9d9',
+		border: '#cdcdcd',
+		borderWidth: '1px',
 		line: '#b4b4b4',
 		muted: '#7d7d7d',
+		note: '#d8ad38',
+		tip: '#187b5a',
+		tipBg: 'rgb(24 123 90 / 0.2)',
 	},
 };

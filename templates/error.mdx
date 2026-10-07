@@ -2,12 +2,11 @@
 title: Why does ...?
 description: Fix "EXACT ERROR TEXT" in Godot 4. Include the error words people search for.
 godot: 4.x
-difficulty: Beginner
 sidebar:
   label: Short sidebar name
 ---
 
-import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -17,14 +16,16 @@ The cause and fix in one or two sentences.
 
 ## The error
 
+You'll see something like this in the **Debugger** panel. The names will be your own:
+
 <GodotError source="_ready()" message={`The exact error text from the Debugger panel.`} />
 
 ## Which cause is it?
 
 | What's happening | Go to |
 |---|---|
-| Symptom the reader can check | [1. First cause](#1-first-cause) |
-| Another symptom | [2. Second cause](#2-second-cause) |
+| Symptom the reader can check | [First cause](#first-cause) |
+| Another symptom | [Second cause](#second-cause) |
 
 ## The example scene
 
@@ -33,7 +34,7 @@ The cause and fix in one or two sentences.
     Child: Label
 `} />
 
-## 1. First cause
+## First cause
 
 Why it happens, in plain words.
 
@@ -42,19 +43,13 @@ wrong_line()
 right_line()
 ```
 
-## 2. Second cause
+## Second cause
 
 Why it happens, and the fix.
 
 ## Still stuck?
 
-<Steps>
-
-1. First thing to check.
-
-2. Second thing to check.
-
-</Steps>
+A short paragraph on how to find the real cause yourself: what to look at in the editor, and what to print if that isn't enough. Write it as advice, not a checklist.
 
 ## Related
 

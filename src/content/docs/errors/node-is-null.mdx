@@ -2,12 +2,11 @@
 title: Why is my node null?
 description: Fix "Invalid access to property or key on a base object of type null instance" and "Node not found" errors in Godot 4.
 godot: 4.x
-difficulty: Beginner
 sidebar:
   label: My node is null
 ---
 
-import { Aside, Steps, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -17,7 +16,7 @@ Godot couldn't find the node when your code asked for it. Either the path is wro
 
 ## The error
 
-You'll see one of these in the **Debugger** panel:
+You'll see something like one of these in the **Debugger** panel. The node name and path will be your own:
 
 <GodotError source="@implicit_ready()" message={`Node not found: "ScoreLabel" (relative to "/root/Main").`} />
 <GodotError source="_ready()" message={`Invalid access to property or key 'text' on a base object of type 'null instance'.`} />
@@ -26,11 +25,11 @@ You'll see one of these in the **Debugger** panel:
 
 | What's happening | Go to |
 |---|---|
-| The error includes `Node not found` | [1. The path is wrong](#1-the-path-is-wrong) |
-| The variable is declared at the top of the script with `$` | [2. Missing `@onready`](#2-missing-onready) |
-| It breaks right after you `instantiate()` a scene | [3. Used before `add_child`](#3-used-before-add_child) |
-| It works at first, then breaks during the game | [4. The node was freed](#4-the-node-was-freed) |
-| The variable uses `@export` | [5. Export not assigned](#5-export-not-assigned) |
+| The error includes `Node not found` | [The path is wrong](#the-path-is-wrong) |
+| The variable is declared at the top of the script with `$` | [Missing `@onready`](#missing-onready) |
+| It breaks right after you `instantiate()` a scene | [Used before `add_child`](#used-before-add_child) |
+| It works at first, then breaks during the game | [The node was freed](#the-node-was-freed) |
+| The variable uses `@export` | [Export not assigned](#export-not-assigned) |
 
 ## The example scene
 
@@ -43,7 +42,7 @@ All the fixes below use this scene. The script is on `Main`.
       ScoreLabel: Label "the node we want"
 `} />
 
-## 1. The path is wrong
+## The path is wrong
 
 `$` is a shortcut for `get_node()`. These two lines do exactly the same thing, so every fix on this page works for both:
 
@@ -130,7 +129,7 @@ Moving `ScoreLabel` into `TopBar` broke `$UI/ScoreLabel`, but `%ScoreLabel` stil
 `%ScoreLabel` works from scripts in the scene where you marked it. If `Player` is a separate scene (`player.tscn`) with its own script, `%ScoreLabel` there returns `null`. To reach across scenes, use a signal, an `@export` variable, or a group.
 </Aside>
 
-## 2. Missing `@onready`
+## Missing `@onready`
 
 Variables at the top of a script are set **before** the node's children exist. Without `@onready`, `$UI/ScoreLabel` runs too early and returns `null`:
 
@@ -141,7 +140,7 @@ var score_label: Label = $UI/ScoreLabel
 
 `@onready` waits until `_ready()`, when every child is in place.
 
-## 3. Used before `add_child`
+## Used before `add_child`
 
 A scene you `instantiate()` isn't in the game until you call `add_child()`. Until then its `_ready()` hasn't run, so all its `@onready` variables are still `null`:
 
@@ -157,7 +156,7 @@ func spawn() -> void:
 
 **Fix:** call `add_child()` first, then set things up.
 
-## 4. The node was freed
+## The node was freed
 
 After `queue_free()`, any variable still pointing at that node is broken. The error mentions a `previously freed` object. Check before using it:
 
@@ -166,7 +165,7 @@ if is_instance_valid(target):
 	target.take_damage(10)
 ```
 
-## 5. Export not assigned
+## Export not assigned
 
 `@export var target: Node2D` is `null` until you set it in the **Inspector**. Select the node and drag the target into the field. To catch it early, add an assert. The game then stops with a clear message instead of a confusing error later:
 
@@ -179,21 +178,14 @@ func _ready() -> void:
 
 ## Still stuck? Check the live scene tree
 
-<Steps>
+The end of the error tells you where Godot started looking: `(relative to "/root/Main")`. Run the game, then click **Remote** at the top of the **Scene** dock. That shows the tree as it really is while the game runs, so you can find your node and compare its actual name and path with what your code says.
 
-1. Read the end of the error: `(relative to "/root/Main")` shows where Godot started looking.
-
-2. Run the game. In the **Scene** dock, click **Remote** to see the scene tree as it is while the game runs.
-
-3. Find your node there and compare its real path and name with the one in your code.
-
-4. Still not sure? Add `print_tree_pretty()` to `_ready()` to print the tree to the Output panel.
-
-</Steps>
+If it's still not obvious, add `print_tree_pretty()` to `_ready()` and read the tree in the Output panel.
 
 ## Related
 
 <CardGrid>
+	<LinkCard title='Why do I get "Nonexistent function"?' description="The node was found, but it doesn't have the function you called." href="/errors/nonexistent-function/" />
 	<LinkCard title="Nodes and scene instances" description="Official docs on get_node and paths." href="https://docs.godotengine.org/en/stable/tutorials/scripting/nodes_and_scene_instances.html" />
 	<LinkCard title="Scene unique nodes" description="Official docs on % unique names." href="https://docs.godotengine.org/en/stable/tutorials/scripting/scene_unique_nodes.html" />
 </CardGrid>

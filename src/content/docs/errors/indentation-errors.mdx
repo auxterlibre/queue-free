@@ -1,0 +1,109 @@
+---
+title: Why do I get "Unexpected indentation"?
+description: "Fix \"Parse Error: Unexpected indentation\", \"Expected indented block\" and \"Used space character for indentation instead of tab\" in Godot 4."
+godot: 4.x
+sidebar:
+  label: Indentation errors
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+A line starts with the wrong amount of whitespace, or mixes tabs and spaces. Turn on **Show Whitespace**, run **Edit → Convert Indent to Tabs**, and line the code up with the lines around it. This is a GDScript error; C# reports these at compile time with different wording.
+</Aside>
+
+## The error
+
+You'll see something like one of these in the script editor and the **Debugger**. The line number will be your own:
+
+<GodotError message={`Parse Error: Unexpected indentation.`} />
+<GodotError message={`Parse Error: Expected indented block after function declaration.`} />
+<GodotError message={`Parse Error: Used space character for indentation instead of tab as used before in the file.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The error mentions `space character` and you pasted code from somewhere | [Mixed tabs and spaces](#mixed-tabs-and-spaces) |
+| The error mentions `Expected indented block` | [An empty function or if block](#an-empty-function-or-if-block) |
+| The error says `Unexpected indentation` | [A line indented when it should not be](#a-line-indented-when-it-should-not-be) |
+| The error is something else and points at the end of a function | [Code outside the function it was meant for](#code-outside-the-function-it-was-meant-for) |
+
+## The example scene
+
+The script is on `Player`.
+
+<SceneTree tree={`
+  Player: CharacterBody2D [script] "script attached here"
+`} />
+
+GDScript uses indentation instead of braces to say which lines belong to a function or an `if`. That makes the exact whitespace at the start of each line part of the code, so one wrong tab breaks the script.
+
+## Mixed tabs and spaces
+
+Godot wants every line in a file indented the same way. Your own lines use tabs, but code pasted from a web page usually arrives with spaces, and the first pasted line that mixes them gets the `space character` error. Both lines below look identical in the editor:
+
+```gdscript title="player.gd" del={3} ins={4}
+func _physics_process(delta: float) -> void:
+	velocity.x = speed
+    move_and_slide()
+	move_and_slide()
+```
+
+**Fix: in the script editor menu, choose Edit → Convert Indent to Tabs.** To see the difference next time, turn on **Editor → Editor Settings → Text Editor → Appearance → Show Whitespace**. Tabs show as arrows and spaces as dots.
+
+## An empty function or if block
+
+A `func`, `if`, `for` or `match` line ends with a colon and promises indented lines underneath. If nothing is there yet, Godot reports `Expected indented block`:
+
+```gdscript title="player.gd" ins={2}
+func take_damage(amount: int) -> void:
+	pass
+
+func _physics_process(delta: float) -> void:
+	move_and_slide()
+```
+
+**Fix: put `pass` in the block until you write the body.** It does nothing and keeps the parser happy.
+
+## A line indented when it should not be
+
+Every line has to be at the level of the code around it. A stray tab on a line after a function has ended, or a `var` at the top of the script that got indented, produces `Unexpected indentation`:
+
+```gdscript title="player.gd" del={3} ins={4}
+extends CharacterBody2D
+
+	var speed := 300.0
+var speed := 300.0
+
+func _physics_process(delta: float) -> void:
+	velocity.x = speed
+	move_and_slide()
+```
+
+**Fix: un-indent the line to match its neighbours.** Top-level `var`, `func` and `signal` lines start at column one. Lines inside a function start with one tab.
+
+## Code outside the function it was meant for
+
+The opposite mistake gives a different error. If the last line of a function loses its tab, it becomes top-level code, and Godot complains with `Unexpected "Identifier" in class body` instead:
+
+```gdscript title="player.gd" del={3} ins={4}
+func _physics_process(delta: float) -> void:
+	velocity.x = speed
+move_and_slide()
+	move_and_slide()
+```
+
+**Fix: indent it back into the function.** When an error points at a line just after a function, check the indent of the line above it too.
+
+## Still stuck?
+
+The error names the line. Click it in the **Debugger** to jump straight there, turn on **Show Whitespace**, and compare the leading characters on that line with the line above. They should be the same symbols, the same number of times, unless the line above ends with a colon, in which case this line needs exactly one more tab.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="GDScript style guide: indentation" description="Official docs on tabs, blocks and line continuation." href="https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html#indentation" />
+</CardGrid>

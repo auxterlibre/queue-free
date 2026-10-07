@@ -2,31 +2,37 @@
 title: How do I move a character in 2D?
 description: Move a CharacterBody2D with the arrow keys or WASD in Godot 4, with collisions.
 godot: 4.x
-difficulty: Beginner
 sidebar:
   label: Move a character (2D)
 ---
 
-**Short answer:** use a `CharacterBody2D`. In `_physics_process`, set its `velocity`, then call `move_and_slide()`.
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
 
-## 1. Set up the scene
+<Aside type="tip" title="Short answer">
+Use a `CharacterBody2D`. In `_physics_process()`, set its `velocity`, then call `move_and_slide()`.
+</Aside>
+
+## Set up the scene
 
 Create a new scene with this structure:
 
-```
-Player (CharacterBody2D)
-├── Sprite2D
-└── CollisionShape2D
-```
+<SceneTree tree={`
+  Player: CharacterBody2D [script] "the script goes here"
+    Sprite2D: Sprite2D
+    CollisionShape2D: CollisionShape2D "give it a shape"
+`} />
 
-- Give the `Sprite2D` a texture. The default `icon.svg` is fine for now.
-- Give the `CollisionShape2D` a shape in the Inspector, such as a `RectangleShape2D` or `CapsuleShape2D`, and resize it to fit the sprite.
+Give the `Sprite2D` a texture. The default `icon.svg` is fine for now. Then select the `CollisionShape2D`, pick a shape in the Inspector such as `RectangleShape2D` or `CapsuleShape2D`, and resize it to fit the sprite.
 
-## 2. Add the script
+## Add the script
 
 Attach a script to `Player`:
 
-```gdscript
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="player.gd"
 extends CharacterBody2D
 
 const SPEED := 300.0
@@ -37,36 +43,64 @@ func _physics_process(_delta: float) -> void:
 	move_and_slide()
 ```
 
-Run the scene. The arrow keys now move the player in 8 directions, and it stops at walls instead of passing through them.
+</TabItem>
+<TabItem label="C#">
 
-`Input.get_vector` returns a vector with a length of 1 or less, so moving diagonally isn't faster than moving straight.
+```csharp title="Player.cs"
+using Godot;
 
-## 3. Use WASD too (optional)
+public partial class Player : CharacterBody2D
+{
+    private const float Speed = 300.0f;
 
-Open **Project → Project Settings → Input Map** and add your own actions: `move_left`, `move_right`, `move_up`, `move_down`. Assign both the arrow keys and WASD to them, then use those names in `get_vector`:
+    public override void _PhysicsProcess(double delta)
+    {
+        Vector2 direction = Input.GetVector("ui_left", "ui_right", "ui_up", "ui_down");
+        Velocity = direction * Speed;
+        MoveAndSlide();
+    }
+}
+```
 
-```gdscript
+</TabItem>
+</Tabs>
+
+Run the scene. The arrow keys move the player in eight directions, and it stops at walls instead of passing through them.
+
+`Input.get_vector()` returns a vector with a length of 1 or less, so moving diagonally isn't faster than moving straight.
+
+## Use WASD too
+
+Open **Project → Project Settings → Input Map** and add four actions: `move_left`, `move_right`, `move_up`, `move_down`. Assign both the arrow keys and WASD to them, then use those names instead of the `ui_` ones:
+
+```gdscript title="player.gd" del={1} ins={2}
+var direction := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
 var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 ```
 
+The `ui_` actions are meant for menus. Keeping your own actions separate means a UI change later won't break your movement.
+
 ## Common mistakes
 
-:::caution[Multiplying by delta]
-`move_and_slide()` already takes the frame time into account. `velocity = direction * SPEED * delta` makes the character crawl.
+:::note[Multiplying by delta]
+`move_and_slide()` already accounts for frame time. `velocity = direction * SPEED * delta` makes the character crawl.
 :::
 
-:::caution[Godot 3 code]
-Old tutorials use `move_and_slide(velocity)` and `KinematicBody2D`. In Godot 4, `velocity` is a property you set, `move_and_slide()` takes no arguments, and the node is called `CharacterBody2D`.
-:::
-
-:::caution[Changing position directly]
+:::note[Changing position directly]
 `position += direction * SPEED * delta` moves the node but skips collision checks, so the character goes through walls.
 :::
 
-:::caution[Warning icon on the node]
-A yellow warning next to `Player` means the `CollisionShape2D` is missing or has no shape. Without one, nothing collides.
+:::note[Warning icon on the node]
+A yellow warning next to `Player` in the Scene dock means the `CollisionShape2D` is missing or has no shape. Without one, nothing collides.
 :::
 
-:::caution[Using _process]
-Put movement in `_physics_process`, not `_process`. Otherwise it can jitter and collide inconsistently.
+:::note[Using _process]
+Put movement in `_physics_process()`, not `_process()`. Otherwise it can jitter and collide inconsistently.
 :::
+
+## Related
+
+<CardGrid>
+	<LinkCard title="CharacterBody2D" description="Official class reference." href="https://docs.godotengine.org/en/stable/classes/class_characterbody2d.html" />
+	<LinkCard title="Using CharacterBody2D" description="Official guide to movement and collision responses." href="https://docs.godotengine.org/en/stable/tutorials/physics/using_character_body_2d.html" />
+</CardGrid>

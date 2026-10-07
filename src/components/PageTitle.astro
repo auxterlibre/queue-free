@@ -1,15 +1,14 @@
 ---
 import Default from '@astrojs/starlight/components/PageTitle.astro';
 
-const { godot, difficulty } = Astro.locals.starlightRoute.entry.data;
+const { godot } = Astro.locals.starlightRoute.entry.data;
 ---
 
 <Default />
 {
-	(godot || difficulty) && (
+	godot && (
 		<p class="tutorial-meta">
-			{godot && <span class="pill">Godot {godot}</span>}
-			{difficulty && <span class="pill">{difficulty}</span>}
+			<span class="pill">Godot {godot}</span>
 		</p>
 	)
 }
@@ -26,6 +25,6 @@ const { godot, difficulty } = Astro.locals.starlightRoute.entry.data;
 		padding: 0.25rem 0.75rem;
 		border-radius: 45px;
 		color: var(--qf-text);
-		background: var(--qf-line);
+		background: var(--qf-tag);
 	}
 </style>

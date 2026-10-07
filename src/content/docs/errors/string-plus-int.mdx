@@ -1,0 +1,121 @@
+---
+title: Why can't I add a String and an int?
+description: Fix "Invalid operands 'String' and 'int' in operator '+'" and "Invalid assignment of property or key 'text' with value of type 'int'" in Godot 4.
+godot: 4.x
+sidebar:
+  label: String + int
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+GDScript won't turn a number into text on its own. Wrap the number in `str()` before you glue it to a String or put it in a `text` property: `"Score: " + str(score)`.
+</Aside>
+
+## The error
+
+You'll see something like one of these in the **Debugger** panel. The function and property names will be your own:
+
+<GodotError source="_on_coin_collected()" message={`Invalid operands 'String' and 'int' in operator '+'.`} />
+<GodotError source="_on_coin_collected()" message={`Invalid assignment of property or key 'text' with value of type 'int' on a base object of type 'Label'.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The error mentions `operator '+'` | [Gluing text and a number with plus](#gluing-text-and-a-number-with-plus) |
+| The error mentions `Invalid assignment of property or key 'text'` | [Assigning a number straight to a text property](#assigning-a-number-straight-to-a-text-property) |
+| It works, but you want padding, decimals or a nicer layout | [Formatting the number](#formatting-the-number) |
+
+## The example scene
+
+The script is on `HUD` and updates `ScoreLabel` every time a coin is collected.
+
+<SceneTree tree={`
+  HUD: CanvasLayer [script] "script attached here"
+    ScoreLabel: Label "shows the score"
+`} />
+
+## Gluing text and a number with plus
+
+`+` on a String means "join two Strings". `score` is an `int`, not a String, so Godot has nothing to join and stops:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="hud.gd" del={8} ins={9}
+extends CanvasLayer
+
+@onready var score_label: Label = $ScoreLabel
+var score := 0
+
+func _on_coin_collected() -> void:
+	score += 1
+	score_label.text = "Score: " + score
+	score_label.text = "Score: " + str(score)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Hud.cs"
+using Godot;
+
+public partial class Hud : CanvasLayer
+{
+    private Label _scoreLabel;
+    private int _score;
+
+    public override void _Ready()
+    {
+        _scoreLabel = GetNode<Label>("ScoreLabel");
+    }
+
+    private void OnCoinCollected()
+    {
+        _score += 1;
+        _scoreLabel.Text = $"Score: {_score}";
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+**Fix: `str()` turns anything into a String.** The C# version works as written because string interpolation (`$"..."`) converts the number for you.
+
+## Assigning a number straight to a text property
+
+`text` on a `Label` only accepts a String. Handing it an `int` fails the same way, just with a longer error:
+
+```gdscript title="hud.gd" del={3} ins={4}
+func _on_coin_collected() -> void:
+	score += 1
+	score_label.text = score
+	score_label.text = str(score)
+```
+
+The same goes for `Button.text`, `LineEdit.text` and `RichTextLabel.text`. Anything that isn't already a String needs `str()` first.
+
+## Formatting the number
+
+When you want more than a plain number, use the `%` operator or `format()` instead of `str()`. `%d` is a whole number, `%.1f` is a float with one decimal, and `%03d` pads with zeros to three digits:
+
+```gdscript title="hud.gd"
+score_label.text = "Score: %d" % score
+score_label.text = "Score: %03d" % score
+time_label.text = "%.1f s" % time_left
+score_label.text = "Score: {0}".format([score])
+```
+
+## Still stuck?
+
+Hover the variable in the script editor to see its type, or drop `print(typeof(score))` on the line above the failing one and run again. `4` means String, `2` means int, `3` means float. Whatever isn't a String needs `str()` before it meets one. If the variable has no type, give it one (`var score := 0` or `var score: int = 0`) so the editor can warn you before you run.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="GDScript format strings" description="Official docs on the % operator and format()." href="https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_format_string.html" />
+</CardGrid>

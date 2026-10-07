@@ -1,0 +1,89 @@
+---
+import { getCollection } from 'astro:content';
+
+const sections: Record<string, string> = {
+	errors: 'Common errors',
+	movement: 'Movement',
+	scenes: 'Scenes',
+	signals: 'Signals',
+	saving: 'Saving',
+};
+
+const docs = (await getCollection('docs')).filter((d) => d.id !== 'index');
+const groups = Object.entries(sections)
+	.map(([dir, label]) => ({
+		label,
+		pages: docs
+			.filter((d) => d.id.startsWith(`${dir}/`))
+			.sort((a, b) => (a.data.sidebar?.label ?? a.data.title).localeCompare(b.data.sidebar?.label ?? b.data.title)),
+	}))
+	.filter((g) => g.pages.length > 0);
+---
+
+<div class="qf-list not-content">
+	{
+		groups.map((g) => (
+			<section>
+				<h2>{g.label}</h2>
+				<ul>
+					{g.pages.map((p) => (
+						<li>
+							<a href={`/${p.id}/`}>{p.data.sidebar?.label ?? p.data.title}</a>
+						</li>
+					))}
+				</ul>
+			</section>
+		))
+	}
+</div>
+
+<style>
+	.qf-list {
+		display: flex;
+		flex-direction: column;
+		gap: 3rem;
+		max-width: 35rem;
+		margin-inline: auto;
+		padding-block: 4.5rem 4rem;
+	}
+	section {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.qf-list section h2 {
+		margin: 0;
+		padding: 0;
+		border-bottom: 1px solid var(--qf-line);
+		font-size: 1rem;
+		line-height: 1.5rem;
+		font-weight: 700;
+		color: var(--qf-muted);
+	}
+	ul {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.qf-list a {
+		display: block;
+		border-radius: 0.25rem;
+		font-size: 1.5rem;
+		line-height: 1.5rem;
+		font-weight: 400;
+		text-decoration: none;
+		color: var(--qf-text);
+		transition: color 0.15s ease;
+	}
+	.qf-list a:hover,
+	.qf-list a:focus-visible {
+		color: var(--qf-link);
+	}
+	.qf-list a:focus-visible {
+		outline: 2px solid var(--qf-link);
+		outline-offset: 0.25rem;
+	}
+</style>

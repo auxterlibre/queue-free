@@ -1,0 +1,176 @@
+---
+title: Why do I get "previously freed instance"?
+description: Fix "Attempt to call function in base 'previously freed' on a null instance" in Godot 4. Something is still using a node after queue_free().
+godot: 4.x
+sidebar:
+  label: Previously freed
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+The node was freed, but something still has a reference to it and tried to use it. Check `is_instance_valid(node)` before touching a node that might be gone.
+</Aside>
+
+## The error
+
+You'll see something like this in the **Debugger** panel. The function name will be your own:
+
+<GodotError source="_on_timer_timeout()" message={`Attempt to call function 'take_damage' in base 'previously freed' on a null instance.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The error comes from a timer, a signal handler, or code after an `await` | [Something fires after the node is gone](#something-fires-after-the-node-is-gone) |
+| A variable or Array holds the node and it breaks later in the game | [A stored reference to a dead node](#a-stored-reference-to-a-dead-node) |
+| You use the node a line or two after freeing it | [Using the node right after freeing it](#using-the-node-right-after-freeing-it) |
+
+## The example scene
+
+`Enemy` has a `Timer` that calls `take_damage()` on itself every second. `Main` keeps a reference to the enemy.
+
+<SceneTree tree={`
+  Main: Node2D [script] "holds a reference to Enemy"
+    Enemy: CharacterBody2D [script] "has take_damage()"
+      Timer: Timer
+`} />
+
+## Something fires after the node is gone
+
+`queue_free()` removes the node at the end of the frame, but anything already scheduled still runs: a `Timer` that times out, a signal from another node, or the rest of a function that is waiting on an `await`. By the time it runs, the node it wants is gone.
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+extends Node2D
+
+@onready var enemy: CharacterBody2D = $Enemy
+
+func hit_later() -> void:
+	await get_tree().create_timer(1.0).timeout
+	enemy.take_damage(10)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+    private Enemy _enemy;
+
+    public override void _Ready()
+    {
+        _enemy = GetNode<Enemy>("Enemy");
+    }
+
+    private async void HitLater()
+    {
+        await ToSignal(GetTree().CreateTimer(1.0), SceneTreeTimer.SignalName.Timeout);
+        _enemy.TakeDamage(10);
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+If the enemy is freed during that one second, the line after `await` hits a dead node.
+
+**Fix: check the node is still there before using it.**
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd" del={3} ins={4,5}
+func hit_later() -> void:
+	await get_tree().create_timer(1.0).timeout
+	enemy.take_damage(10)
+	if is_instance_valid(enemy):
+		enemy.take_damage(10)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs" del={4} ins={5,6}
+private async void HitLater()
+{
+    await ToSignal(GetTree().CreateTimer(1.0), SceneTreeTimer.SignalName.Timeout);
+    _enemy.TakeDamage(10);
+    if (IsInstanceValid(_enemy))
+        _enemy.TakeDamage(10);
+}
+```
+
+</TabItem>
+</Tabs>
+
+When the code after the `await` is inside the node that gets freed, the simplest guard is on the node itself:
+
+```gdscript title="enemy.gd"
+func _on_timer_timeout() -> void:
+	if not is_inside_tree():
+		return
+	take_damage(1)
+```
+
+## A stored reference to a dead node
+
+A variable like `var target: Node2D` or an Array of enemies keeps pointing at a node after it has been freed. Godot doesn't set your variable to `null` for you, so the next time you use it, you get this error.
+
+**Fix: clear the reference when the node leaves.** Every node emits `tree_exited` on its way out, so hook into that when you store it:
+
+```gdscript title="main.gd"
+var target: Node2D
+
+func set_target(enemy: Node2D) -> void:
+	target = enemy
+	enemy.tree_exited.connect(func() -> void: target = null)
+```
+
+For an Array, drop the dead ones before you loop:
+
+```gdscript title="main.gd"
+var enemies: Array[Node2D] = []
+
+func damage_all() -> void:
+	enemies = enemies.filter(is_instance_valid)
+	for enemy in enemies:
+		enemy.take_damage(10)
+```
+
+## Using the node right after freeing it
+
+This is fine, even though it looks wrong:
+
+```gdscript title="main.gd"
+enemy.queue_free()
+enemy.position = Vector2.ZERO
+```
+
+`queue_free()` only marks the node to be removed at the end of the current frame, so the node is still alive on the next line. `free()` is different. It deletes the node immediately, and anything after it on the same node breaks:
+
+```gdscript title="main.gd" del={1} ins={2}
+enemy.free()
+enemy.queue_free()
+```
+
+**Fix: prefer `queue_free()`**, and if you really need `free()`, make it the last thing you do with that node.
+
+## Still stuck?
+
+The error names the function that was called on the dead node, so you know what the node was. Search your scripts for every variable, Array and Dictionary that stores it, and look for the one that outlives the node. When you test for it, use `is_instance_valid(node)` rather than `node == null`. A freed reference is not `null`, it is a dead object, and only `is_instance_valid()` tells the two apart.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Why is my node null?" description="The node was never found in the first place." href="/errors/node-is-null/" />
+	<LinkCard title="Node.queue_free()" description="Official reference for queue_free and when the node actually goes away." href="https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-queue-free" />
+</CardGrid>

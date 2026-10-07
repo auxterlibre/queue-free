@@ -1,0 +1,138 @@
+---
+title: Why can't I change this state while flushing queries?
+description: Fix "Can't change this state while flushing queries. Use call_deferred() or set_deferred()" and "Removing a CollisionObject node during a physics callback is not allowed" in Godot 4.
+godot: 4.x
+sidebar:
+  label: Flushing queries
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+You changed a collision shape, body or area from inside `body_entered` or `area_entered`. Godot is still processing collisions at that moment, so defer the change with `set_deferred()` or `call_deferred()`.
+</Aside>
+
+## The error
+
+You'll see something like one of these in the **Debugger** panel. The function name will be your own:
+
+<GodotError source="_on_body_entered()" message={`Can't change this state while flushing queries. Use call_deferred() or set_deferred() to change monitoring state instead.`} />
+<GodotError source="_on_body_entered()" message={`Removing a CollisionObject node during a physics callback is not allowed and will cause undesired behavior. Remove with call_deferred() instead.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| You set `disabled` on a `CollisionShape2D` or `CollisionShape3D` | [Disabling the collision shape](#disabling-the-collision-shape) |
+| You call `queue_free()` on an `Area2D`, a body, or their parent | [Freeing the body or area](#freeing-the-body-or-area) |
+| You set `monitoring` or `monitorable` | [Turning monitoring on or off](#turning-monitoring-on-or-off) |
+| You change scene from the callback | [Changing scene from the callback](#changing-scene-from-the-callback) |
+
+## The example scene
+
+`Coin` is an `Area2D` with its `body_entered` signal connected to its own script. All the errors below happen inside that handler.
+
+<SceneTree tree={`
+  Level: Node2D
+    Player: CharacterBody2D
+    Coin: Area2D [script] "body_entered connected here"
+      CollisionShape2D: CollisionShape2D
+`} />
+
+`body_entered` runs in the middle of the physics step, while Godot is still working through the list of collisions it found. Changing collision objects at that moment would alter the list it is reading, so Godot refuses and asks you to wait until the step is over. That's what "deferred" means: do it at the end of the frame instead of right now.
+
+## Disabling the collision shape
+
+The natural way to stop a coin being collected twice is to switch off its shape, but setting `disabled` directly in the handler is a collision change in the middle of the physics step.
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="coin.gd" del={4} ins={5}
+extends Area2D
+
+func _on_body_entered(body: Node2D) -> void:
+	$CollisionShape2D.disabled = true
+	$CollisionShape2D.set_deferred("disabled", true)
+	hide()
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Coin.cs" del={7} ins={8}
+using Godot;
+
+public partial class Coin : Area2D
+{
+    private void OnBodyEntered(Node2D body)
+    {
+        GetNode<CollisionShape2D>("CollisionShape2D").Disabled = true;
+        GetNode<CollisionShape2D>("CollisionShape2D").SetDeferred(CollisionShape2D.PropertyName.Disabled, true);
+        Hide();
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+`set_deferred()` takes the property name as a string and the value to set. Godot applies it once the physics step is done.
+
+## Freeing the body or area
+
+Freeing the coin from its own `body_entered` gives the second error, because the coin is a `CollisionObject2D` and removing it mid-step is the same problem. Call `queue_free()` deferred instead:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="coin.gd" del={2} ins={3}
+func _on_body_entered(body: Node2D) -> void:
+	queue_free()
+	queue_free.call_deferred()
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Coin.cs" del={3} ins={4}
+private void OnBodyEntered(Node2D body)
+{
+    QueueFree();
+    CallDeferred(MethodName.QueueFree);
+}
+```
+
+</TabItem>
+</Tabs>
+
+`call_deferred("queue_free")` with a string does the same thing. This only matters for nodes that take part in collision: freeing a plain `Node2D`, a `Sprite2D` or a `Label` from the callback is fine.
+
+## Turning monitoring on or off
+
+`monitoring` is the `Area2D` property that decides whether it detects bodies at all. Switching it off inside the handler is exactly the state the first error is talking about:
+
+```gdscript title="coin.gd" del={2} ins={3}
+func _on_body_entered(body: Node2D) -> void:
+	monitoring = false
+	set_deferred("monitoring", false)
+```
+
+The same goes for `monitorable`, and for the collision layer and mask properties.
+
+## Changing scene from the callback
+
+Changing scene frees the whole current scene, collision objects included, so from a physics callback it needs deferring too: `get_tree().change_scene_to_file.call_deferred("res://next.tscn")`. See [How do I change scenes?](/scenes/change-scene/) for the rest.
+
+## Still stuck?
+
+Click the error in the **Debugger** panel and read the stack trace. The physics callback, `_on_body_entered` or `_on_area_entered`, sits at the top, and every line below it ran as part of that callback. Anything in that chain that disables a shape, frees a body or area, or toggles monitoring needs to go through `set_deferred()` or `call_deferred()`, even if it lives in another function or another node.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Object.call_deferred()" description="Official reference for call_deferred and set_deferred." href="https://docs.godotengine.org/en/stable/classes/class_object.html#class-object-method-call-deferred" />
+	<LinkCard title='Why do I get "previously freed instance"?' description="What goes wrong when something uses a node after it has been freed." href="/errors/previously-freed-instance/" />
+</CardGrid>

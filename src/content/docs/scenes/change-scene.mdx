@@ -1,0 +1,91 @@
+---
+title: How do I change scenes?
+description: Switch from one scene to another in Godot 4, by file path or from a preloaded PackedScene.
+godot: 4.x
+sidebar:
+  label: Change scene
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+<Aside type="tip" title="Short answer">
+Call `get_tree().change_scene_to_file("res://level_2.tscn")`. The current scene is freed and the new one takes its place.
+</Aside>
+
+## Change to a scene by path
+
+One line does it. Put it wherever the switch should happen, such as when the player touches the exit or presses a button:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="level_1.gd"
+extends Node2D
+
+func go_to_next_level() -> void:
+	get_tree().change_scene_to_file("res://level_2.tscn")
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Level1.cs"
+using Godot;
+
+public partial class Level1 : Node2D
+{
+    public void GoToNextLevel()
+    {
+        GetTree().ChangeSceneToFile("res://level_2.tscn");
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+The path must be the full `res://` path to the `.tscn` file, and it is case-sensitive: `res://Level_2.tscn` won't find `level_2.tscn`. Don't type it by hand. Right-click the file in the **FileSystem** dock and pick **Copy Path**, then paste it between the quotes.
+
+## Change to a preloaded scene
+
+If you'd rather not deal with paths as strings, load the scene into a constant at the top of the script and pass that instead:
+
+```gdscript title="level_1.gd"
+extends Node2D
+
+const LEVEL_2 := preload("res://level_2.tscn")
+
+func go_to_next_level() -> void:
+	get_tree().change_scene_to_packed(LEVEL_2)
+```
+
+The editor checks the `preload()` path as soon as you save the script, and renaming or moving the file in the FileSystem dock updates it for you.
+
+## What happens to the old scene
+
+The scene you were in is freed. Every node on it is gone, along with its scripts and their variables, so a score stored on `level_1.gd` doesn't make it into `level_2.tscn`. To keep a value across scenes, put it in an autoload.
+
+## Common mistakes
+
+:::note[Wrong path]
+A typo, the wrong folder, or a missing `res://` makes the call fail with nothing shown. Use **Copy Path** from the FileSystem dock instead of typing the path.
+:::
+
+:::note[Calling it from a physics callback]
+Changing scenes inside `body_entered` or another physics signal frees nodes while the physics engine is still using them. Use `get_tree().change_scene_to_file.call_deferred("res://level_2.tscn")` so it happens at the end of the frame, see [Why can't I change this state while flushing queries?](/errors/flushing-queries/).
+:::
+
+:::note[Using the old scene's nodes afterwards]
+After the change, every node of the previous scene is freed. A variable still pointing at one of them gives a `previously freed` error when you touch it.
+:::
+
+:::note[Changing to the same scene to restart]
+If you only want to restart the current level, call `get_tree().reload_current_scene()`. It does the same thing without you needing to know the path.
+:::
+
+## Related
+
+<CardGrid>
+	<LinkCard title="How do I spawn a scene from code?" description="Instantiate a scene and add it to the running game." href="/scenes/instantiate-scene/" />
+	<LinkCard title="SceneTree.change_scene_to_file" description="Official class reference." href="https://docs.godotengine.org/en/stable/classes/class_scenetree.html#class-scenetree-method-change-scene-to-file" />
+</CardGrid>

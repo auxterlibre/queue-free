@@ -1,0 +1,126 @@
+---
+title: Why is my identifier not declared in the current scope?
+description: "Fix \"Parser Error: Identifier not declared in the current scope\" in Godot 4. The variable exists, but not where you're using it."
+godot: 4.x
+sidebar:
+  label: Identifier not declared
+---
+
+import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+import GodotError from '../../../components/GodotError.astro';
+
+<Aside type="tip" title="Short answer">
+Godot can't see a variable, class or autoload with that name from the line you're on. It's usually declared inside a different function, declared below the line that uses it, or spelled differently. This is a GDScript error; C# reports these at compile time with different wording.
+</Aside>
+
+## The error
+
+You'll see something like this in the script editor and the **Debugger**. The identifier name and line will be your own:
+
+<GodotError message={`Parser Error: Identifier "speed" not declared in the current scope.`} />
+
+## Which cause is it?
+
+| What's happening | Go to |
+|---|---|
+| The `var` line is inside a different function | [Declared inside another function](#declared-inside-another-function) |
+| The `var` line is below the line that uses it, in the same function | [Used before it is declared](#used-before-it-is-declared) |
+| The identifier is an autoload like `Global` | [An autoload that is not registered](#an-autoload-that-is-not-registered) |
+| The identifier is a `class_name` you just added | [A class name the editor has not seen yet](#a-class-name-the-editor-has-not-seen-yet) |
+| It's declared right there and still fails | [A typo or wrong case](#a-typo-or-wrong-case) |
+
+## The example scene
+
+The script is on `Player`.
+
+<SceneTree tree={`
+  Player: CharacterBody2D [script] "script attached here"
+`} />
+
+## Declared inside another function
+
+A variable declared inside a function only exists inside that function. Here `speed` is created in `_ready()`, so `_physics_process()` has never heard of it:
+
+```gdscript title="player.gd"
+extends CharacterBody2D
+
+func _ready() -> void:
+	var speed := 300.0
+
+func _physics_process(delta: float) -> void:
+	velocity.x = Input.get_axis("left", "right") * speed
+	move_and_slide()
+```
+
+**Fix: move the `var` to the top of the script, outside any function.** Then every function in the script can use it:
+
+```gdscript title="player.gd" del={6} ins={3}
+extends CharacterBody2D
+
+var speed := 300.0
+
+func _ready() -> void:
+	var speed := 300.0
+
+func _physics_process(delta: float) -> void:
+	velocity.x = Input.get_axis("left", "right") * speed
+	move_and_slide()
+```
+
+## Used before it is declared
+
+Inside a function, lines run top to bottom, and a variable doesn't exist until its `var` line has run. Using it one line too early fails:
+
+```gdscript title="player.gd" del={2} ins={4}
+func count_coins() -> void:
+	print(total)
+	var total := 0
+	print(total)
+```
+
+**Fix: declare first, use after.** This only matters inside functions. Variables at the top of the script can be declared in any order, above or below the functions that use them, and Godot finds them fine.
+
+## An autoload that is not registered
+
+`Global.score` works only if a script is registered as an autoload named exactly `Global`. Open **Project → Project Settings → Globals** (the **Autoload** tab) and check the list. If the script isn't there, add it. If it's there under a different name, like `Globals` or `global`, either rename it or change your code to match. The name is case-sensitive.
+
+```gdscript title="player.gd"
+func collect_coin() -> void:
+	Global.score += 1
+```
+
+## A class name the editor has not seen yet
+
+Right after you add `class_name Player` to a script, other scripts may still fail on `var p: Player`. The editor only picks up new class names when the script is saved.
+
+```gdscript title="player.gd"
+class_name Player
+extends CharacterBody2D
+```
+
+**Fix: save the script with the `class_name`.** If the error stays, use **Project → Reload Current Project** so the editor rescans every script.
+
+## A typo or wrong case
+
+Identifiers are case-sensitive and exact: `speed`, `Speed` and `spped` are three different names. Copy the name from its `var` line instead of retyping it:
+
+```gdscript title="player.gd" del={4} ins={5}
+var speed := 300.0
+
+func _physics_process(delta: float) -> void:
+	velocity.x = Input.get_axis("left", "right") * Speed
+	velocity.x = Input.get_axis("left", "right") * speed
+	move_and_slide()
+```
+
+## Still stuck?
+
+The error gives you the exact identifier and the line number. Press <kbd>Ctrl</kbd>+<kbd>F</kbd> in the script editor and search for `var speed` (with your own name). If it turns up nothing, it's a typo or a missing autoload. If it does turn up, look at which function that `var` line is inside and compare it with the function the failing line is in. If they differ, that's your answer.
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Why is my node null?" description="The variable exists, but the node it should hold doesn't." href="/errors/node-is-null/" />
+	<LinkCard title="GDScript variables" description="Official docs on declaring variables and where they live." href="https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#variables" />
+</CardGrid>

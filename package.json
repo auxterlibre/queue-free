@@ -4,8 +4,6 @@
   "version": "0.0.1",
   "scripts": {
     "palette": "node src/styles/palette-css.mjs",
-    "predev": "npm run palette",
-    "prebuild": "npm run palette",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",

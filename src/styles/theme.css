@@ -7,6 +7,7 @@
 	--qf-line: #4a4a4a;
 	--qf-accent: #57a0ff;
 	--qf-link: #569eff;
+	--qf-tag: #262626;
 
 	--sl-color-bg: var(--qf-bg);
 	--sl-color-bg-nav: var(--qf-bg);
@@ -36,6 +37,7 @@
 	--qf-line: #c9c9c9;
 	--qf-accent: #2e80ff;
 	--qf-link: #1f6fe5;
+	--qf-tag: #b3b3b3;
 }
 
 :root {
@@ -75,7 +77,7 @@
 	.sidebar-pane {
 		inset-inline-start: var(--qf-gutter);
 	}
-	.main-frame {
+	:root[data-has-sidebar] .main-frame {
 		padding-inline-start: calc(var(--qf-gutter) + var(--sl-sidebar-width) + 1rem);
 	}
 	.right-sidebar-container {
@@ -231,6 +233,10 @@
 	margin-top: 1rem;
 }
 
+.pagination-links:empty {
+	display: none;
+}
+
 .sl-markdown-content a {
 	color: var(--qf-link);
 }
@@ -265,10 +271,10 @@
 	color: var(--qf-code-error);
 }
 
-/* Inside a link, code takes the link colour so the link reads as one unit.
+/* Inside a link or heading, code takes the parent colour so it reads as one unit.
    The second selector outranks the token-colour rules above. */
-.sl-markdown-content a code:not(pre code),
-.sl-markdown-content a code[class]:not(pre code) {
+.sl-markdown-content :is(a, h1, h2, h3, h4) code:not(pre code),
+.sl-markdown-content :is(a, h1, h2, h3, h4) code[class]:not(pre code) {
 	color: inherit;
 }
 
@@ -300,23 +306,49 @@
 	line-height: 1.5rem;
 }
 
-/* Tip ("Short answer"): gold, with the design's double-chevron icon. */
+/* Tip ("Short answer"): base-type green, no icon. */
 .starlight-aside--tip {
-	--qf-tip: #d8ad38;
-	--sl-color-asides-text-accent: var(--qf-tip);
-	--sl-color-asides-border: var(--qf-tip);
-	background-color: rgb(216 173 56 / 0.2);
+	--sl-color-asides-text-accent: var(--qf-frame-tip);
+	--sl-color-asides-border: var(--qf-frame-tip);
+	background-color: var(--qf-frame-tip-bg);
+	color: var(--qf-text);
 }
 .starlight-aside--tip .starlight-aside__icon {
-	flex: none;
-	width: 2rem;
-	height: 2rem;
-	background: currentColor;
-	mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M3.33333 24V8L15.3333 16L3.33333 24ZM16.6667 24V8L28.6667 16L16.6667 24ZM6 19L10.5333 16L6 13V19ZM19.3333 19L23.8667 16L19.3333 13V19Z'/%3E%3C/svg%3E")
-		center / contain no-repeat;
-}
-.starlight-aside--tip .starlight-aside__icon path {
 	display: none;
+}
+
+/* Caution and note: no box; a title row with a rule under it, annotation-sized body.
+   Caution is gold with the warning icon; note (used for "Common mistakes") is neutral. */
+.starlight-aside--caution,
+.starlight-aside--note {
+	padding: 0 1rem;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	color: var(--qf-text);
+}
+.starlight-aside--caution {
+	--sl-color-asides-text-accent: var(--qf-frame-note);
+}
+.starlight-aside--note {
+	--sl-color-asides-text-accent: var(--qf-text);
+}
+.starlight-aside--caution .starlight-aside__title,
+.starlight-aside--note .starlight-aside__title {
+	padding: 0.5rem 0.25rem;
+	border-bottom: 1px solid var(--sl-color-asides-text-accent);
+}
+.starlight-aside--caution .starlight-aside__icon {
+	font-size: 1.375rem;
+}
+.starlight-aside--note .starlight-aside__icon {
+	display: none;
+}
+.starlight-aside--caution .starlight-aside__title + .starlight-aside__content,
+.starlight-aside--note .starlight-aside__title + .starlight-aside__content {
+	margin-top: 0.625rem;
+	font-size: 0.875rem;
+	line-height: 1.5rem;
 }
 
 /* --- Motion ------------------------------------------------------------- */

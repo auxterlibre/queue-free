@@ -2,6 +2,7 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import rehypeInlineCode from './src/plugins/rehype-inline-code.mjs';
+import './src/styles/palette-css.mjs';
 
 export default defineConfig({
 	site: 'https://queuefree.dev',
@@ -13,6 +14,7 @@ export default defineConfig({
 			title: 'Queue Free',
 			description: 'Short, practical answers to the most asked Godot 4 questions.',
 			lastUpdated: true,
+			pagination: false,
 			// Fonts are declared in src/components/Head.astro.
 			customCss: [
 				'./src/styles/palette.css',
@@ -20,6 +22,7 @@ export default defineConfig({
 			],
 			components: {
 				Head: './src/components/Head.astro',
+				Hero: './src/components/Hero.astro',
 				Header: './src/components/Header.astro',
 				SiteTitle: './src/components/SiteTitle.astro',
 				Sidebar: './src/components/Sidebar.astro',
@@ -34,6 +37,18 @@ export default defineConfig({
 				{
 					label: 'Movement',
 					items: [{ autogenerate: { directory: 'movement' } }],
+				},
+				{
+					label: 'Scenes',
+					items: [{ autogenerate: { directory: 'scenes' } }],
+				},
+				{
+					label: 'Signals',
+					items: [{ autogenerate: { directory: 'signals' } }],
+				},
+				{
+					label: 'Saving',
+					items: [{ autogenerate: { directory: 'saving' } }],
 				},
 			],
 		}),

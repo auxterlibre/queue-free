@@ -1,0 +1,160 @@
+---
+title: How do I save and load the game?
+description: Write game data to a JSON file under user:// and read it back in Godot 4.
+godot: 4.x
+sidebar:
+  label: Save and load
+---
+
+import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+
+<Aside type="tip" title="Short answer">
+Put the data in a `Dictionary`, turn it into JSON with `JSON.stringify()`, and write it to a file under `user://` with `FileAccess`. Loading does the same in reverse.
+</Aside>
+
+## What to save
+
+The script sits on `Main` and holds the values worth keeping:
+
+<SceneTree tree={`
+  Main: Node2D [script] "the script goes here"
+`} />
+
+Gather those values into a `Dictionary` of plain types: numbers, strings, booleans and arrays of them. Save values, not nodes.
+
+```gdscript title="main.gd"
+extends Node2D
+
+var coins := 0
+var level := 1
+
+func get_save_data() -> Dictionary:
+	return {
+		"coins": coins,
+		"level": level,
+		"position": [position.x, position.y],
+	}
+```
+
+## Save to a file
+
+Open a file for writing, turn the dictionary into a JSON string, and store it. The file closes on its own when the variable goes out of scope:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+func save_game() -> void:
+	var data := get_save_data()
+	var file := FileAccess.open("user://save.json", FileAccess.WRITE)
+	file.store_string(JSON.stringify(data))
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+using Godot.Collections;
+
+public partial class Main : Node2D
+{
+    private int _coins = 0;
+    private int _level = 1;
+
+    private Dictionary GetSaveData()
+    {
+        return new Dictionary
+        {
+            { "coins", _coins },
+            { "level", _level },
+            { "position", new Array { Position.X, Position.Y } },
+        };
+    }
+
+    private void SaveGame()
+    {
+        using var file = FileAccess.Open("user://save.json", FileAccess.ModeFlags.Write);
+        file.StoreString(Json.Stringify(GetSaveData()));
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+`user://` is a folder Godot owns for your game, writable on every platform; open it from the editor with **Project → Open User Data Folder** to see `save.json` appear. The extension is up to you: `.json` is a hint to people reading the folder, but `.save`, `.dat` or no extension at all works exactly the same, because Godot only cares about the text inside.
+
+## Load it back
+
+Check the file exists first, so the very first run doesn't crash. Then open it for reading, parse the text, and copy the values back:
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+func load_game() -> void:
+	if not FileAccess.file_exists("user://save.json"):
+		return
+	var file := FileAccess.open("user://save.json", FileAccess.READ)
+	var data = JSON.parse_string(file.get_as_text())
+	if data == null:
+		return
+	coins = int(data["coins"])
+	level = int(data["level"])
+	position = Vector2(data["position"][0], data["position"][1])
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+private void LoadGame()
+{
+    if (!FileAccess.FileExists("user://save.json"))
+    {
+        return;
+    }
+    using var file = FileAccess.Open("user://save.json", FileAccess.ModeFlags.Read);
+    var data = Json.ParseString(file.GetAsText()).AsGodotDictionary();
+    if (data == null)
+    {
+        return;
+    }
+    _coins = (int)data["coins"];
+    _level = (int)data["level"];
+    var pos = data["position"].AsGodotArray();
+    Position = new Vector2((float)pos[0], (float)pos[1]);
+}
+```
+
+</TabItem>
+</Tabs>
+
+`JSON.parse_string()` returns `null` when the text isn't valid JSON, which is why there is a second check. JSON has no integer type, so every number comes back as a float: `data["coins"]` is `12.0`, not `12`, and `int()` turns it back.
+
+## Common mistakes
+
+:::note[Writing to res://]
+`res://` is your project folder, and in an exported game it is read-only. `FileAccess.open("res://save.json", FileAccess.WRITE)` works in the editor and returns `null` on the player's machine. Always save under `user://`.
+:::
+
+:::note[Putting a node in the dictionary]
+`{"player": $Player}` or a `Resource` reference can't be turned into JSON; `JSON.stringify()` writes a useless string in its place. Store the values you need, such as the position and health, not the object that holds them.
+:::
+
+:::note[Loading before anything was saved]
+On a fresh install there is no file, so `FileAccess.open()` returns `null` and the next line crashes. Check `FileAccess.file_exists()` first and bail out.
+:::
+
+:::note[Using loaded numbers as ints]
+`level = data["level"]` tries to put a float into an `int` variable and stops with a type error, and `"Level " + str(data["level"])` prints `Level 1.0`. Convert with `int()` as soon as you read it.
+:::
+
+## Related
+
+<CardGrid>
+	<LinkCard title="Saving games" description="Official guide, including saving several nodes at once." href="https://docs.godotengine.org/en/stable/tutorials/io/saving_games.html" />
+	<LinkCard title="FileAccess" description="Official class reference." href="https://docs.godotengine.org/en/stable/classes/class_fileaccess.html" />
+</CardGrid>

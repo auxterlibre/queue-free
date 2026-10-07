@@ -58,7 +58,7 @@ export default defineEcConfig({
 		codePaddingBlock: '1rem',
 		codePaddingInline: '1rem',
 		borderColor: (ctx) => palette(ctx).frame.border,
-		borderWidth: '2px',
+		borderWidth: (ctx) => palette(ctx).frame.borderWidth,
 		borderRadius: '0.5rem',
 		frames: {
 			shadowColor: 'transparent',
