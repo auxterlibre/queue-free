@@ -215,6 +215,13 @@
 	color: var(--qf-text);
 }
 
+.sidebar-content a:not([aria-current='page']):hover,
+.sidebar-content a:not([aria-current='page']):focus-visible,
+.right-sidebar a:hover,
+.right-sidebar a:focus-visible {
+	color: var(--qf-link);
+}
+
 .content-panel h1,
 .sl-markdown-content :is(h2, h3, h4) {
 	font-weight: 700;
