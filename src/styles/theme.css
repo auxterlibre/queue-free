@@ -261,18 +261,11 @@
 	font-size: inherit;
 }
 
-.sl-markdown-content code.qf-node-path,
-.sl-markdown-content code.qf-node-reference {
-	color: var(--qf-code-path);
+.sl-markdown-content code.qf-inline span {
+	color: var(--shiki-dark);
 }
-.sl-markdown-content code.qf-annotation {
-	color: var(--qf-code-annotation);
-}
-.sl-markdown-content code.qf-function {
-	color: var(--qf-code-function);
-}
-.sl-markdown-content code.qf-keyword {
-	color: var(--qf-code-keyword);
+:root[data-theme='light'] .sl-markdown-content code.qf-inline span {
+	color: var(--shiki-light);
 }
 .sl-markdown-content code.qf-error {
 	color: var(--qf-code-error);
@@ -283,6 +276,9 @@
 .sl-markdown-content :is(a, h1, h2, h3, h4) code:not(pre code),
 .sl-markdown-content :is(a, h1, h2, h3, h4) code[class]:not(pre code) {
 	color: inherit;
+}
+.sl-markdown-content :is(a, h1, h2, h3, h4) code.qf-inline span {
+	color: inherit !important;
 }
 
 /* Diff indicators: Material "close" and "check" icons, coloured by the marker. */

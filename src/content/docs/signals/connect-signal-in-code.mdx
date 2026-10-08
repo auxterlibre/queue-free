@@ -74,7 +74,69 @@ func _on_body_entered(body: Node2D) -> void:
 	print(body.name, " entered")
 ```
 
-The handler must take the same parameters the signal sends, in the same order. To see what a signal sends, select the node, open the **Node → Signals** dock and read the signature next to its name. If you want to pass something extra of your own, add it with `.bind()`: `$Area2D.body_entered.connect(_on_body_entered.bind("left"))` makes the handler receive `body` and then `"left"`.
+The handler must take the same parameters the signal sends, in the same order. To see what a signal sends, select the node, open the **Node → Signals** dock and read the signature next to its name.
+
+## Pass extra values with bind()
+
+Sometimes the handler needs something the signal does not send, like which button was pressed when several share one function. Call `.bind()` on the function and pass the extra values. They arrive after the signal's own arguments:
+
+<SceneTree tree={`
+  Main: Node2D [script]
+    HBoxContainer: HBoxContainer
+      RedButton: Button
+      GreenButton: Button
+`} />
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+extends Node2D
+
+func _ready() -> void:
+	$HBoxContainer/RedButton.pressed.connect(_on_color_pressed.bind(Color.RED))
+	$HBoxContainer/GreenButton.pressed.connect(_on_color_pressed.bind(Color.GREEN))
+
+func _on_color_pressed(color: Color) -> void:
+	print("Picked ", color)
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class Main : Node2D
+{
+    public override void _Ready()
+    {
+        GetNode<Button>("HBoxContainer/RedButton").Pressed += () => OnColorPressed(Colors.Red);
+        GetNode<Button>("HBoxContainer/GreenButton").Pressed += () => OnColorPressed(Colors.Green);
+    }
+
+    private void OnColorPressed(Color color)
+    {
+        GD.Print($"Picked {color}");
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+`pressed` sends nothing, so `color` is the only parameter. With a signal that does send data, the signal's arguments come first and the bound ones after. Binding to `body_entered` gives a handler of `(body: Node2D, side: String)`:
+
+```gdscript title="main.gd"
+func _ready() -> void:
+	$LeftZone.body_entered.connect(_on_zone_entered.bind("left"))
+	$RightZone.body_entered.connect(_on_zone_entered.bind("right"))
+
+func _on_zone_entered(body: Node2D, side: String) -> void:
+	print(body.name, " entered the ", side, " zone")
+```
+
+In C# there is no `Bind`. A lambda that calls your method with the extra value does the same job.
 
 ## Make your own signal
 
@@ -166,6 +228,10 @@ $Button.pressed.connect(_on_button_pressed)
 
 :::note[Wrong number of parameters]
 If the signal sends one argument and your handler takes none, Godot reports a method call error the moment it fires. Match the handler's parameters to the signature shown in the Node → Signals dock.
+:::
+
+:::note[Bound values in the wrong place]
+Bound values are appended after the signal's arguments, never before. A handler for `body_entered.connect(f.bind("left"))` must be `func f(body, side)`, not `func f(side, body)`.
 :::
 
 :::note[Connecting twice]
