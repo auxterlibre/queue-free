@@ -15,6 +15,10 @@ export default defineConfig({
 			description: 'Short, practical answers to the most asked Godot 4 questions.',
 			lastUpdated: true,
 			pagination: false,
+			head: [
+				{ tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico', sizes: '32x32' } },
+				{ tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
+			],
 			// Fonts are declared in src/components/Head.astro.
 			customCss: [
 				'./src/styles/palette.css',
