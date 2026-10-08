@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://queuefree.dev/sitemap-index.xml

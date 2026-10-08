@@ -18,6 +18,8 @@ export default defineConfig({
 			head: [
 				{ tag: 'link', attrs: { rel: 'icon', href: '/favicon.ico', sizes: '32x32' } },
 				{ tag: 'link', attrs: { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' } },
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://queuefree.dev/og.png' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://queuefree.dev/og.png' } },
 			],
 			// Fonts are declared in src/components/Head.astro.
 			customCss: [
