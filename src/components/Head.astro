@@ -82,7 +82,7 @@ const preload = [
 		}
 		const move = () => {
 			const link = container.querySelector<HTMLElement>(currentSelector);
-			if (!link) {
+			if (!link?.checkVisibility()) {
 				bar!.style.opacity = '0';
 				return;
 			}
@@ -104,6 +104,7 @@ const preload = [
 		tracked.add(container);
 		new MutationObserver(move).observe(container, { subtree: true, attributeFilter: ['aria-current'] });
 		new ResizeObserver(move).observe(container);
+		container.addEventListener('toggle', move, true);
 	};
 	// Wraps Starlight's `current` setter: a click pins its entry until the reader scrolls, and the page bottom selects the last entry.
 	const tameToc = async (toc: HTMLElement | null) => {

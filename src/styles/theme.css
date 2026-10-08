@@ -174,7 +174,11 @@
 }
 
 .sidebar-content summary .caret {
-	display: none;
+	color: var(--qf-muted);
+	transform: rotate(90deg);
+}
+.sidebar-content details[open] > summary .caret {
+	transform: rotate(-90deg);
 }
 
 .sidebar-content ul ul li {
