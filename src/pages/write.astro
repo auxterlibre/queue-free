@@ -1143,13 +1143,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				case 'set-kind': {
 					const kind = ((btn as HTMLInputElement).value || value) as PageKind;
 					if (kind === draft.page.kind) return;
-					const edited = blocks.some((b) => JSON.stringify(b) !== JSON.stringify(templateBlocks(draft.page.kind).find((t) => t.type === b.type)));
-					if (edited && !confirm('Switching the page type replaces the content blocks with the template for that type. Continue?')) {
-						renderAll();
-						return;
-					}
+					// An untouched template is swapped for the other one; edited content is kept.
+					const untouched = JSON.stringify(blocks) === JSON.stringify(templateBlocks(draft.page.kind));
 					draft.page.kind = kind;
-					draft.page.blocks = templateBlocks(kind);
+					if (untouched) draft.page.blocks = templateBlocks(kind);
 					if (kind === 'error' && 'errors' in categories) {
 						draft.page.category = 'errors';
 						draft.newCategory = false;
