@@ -10,7 +10,7 @@ import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/com
 import SceneTree from '../../../components/SceneTree.astro';
 
 <Aside type="tip" title="Short answer">
-`$Button.pressed.connect(_on_button_pressed)`: the signal, `.connect`, and the function itself without parentheses.
+`$Button.pressed.connect(_on_button_pressed)`: the signal (no parentheses), then `.connect(...)`, passing the function name without parentheses so it is handed over rather than called.
 </Aside>
 
 ## Connect a built-in signal
