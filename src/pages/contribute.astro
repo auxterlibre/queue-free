@@ -131,7 +131,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	const BLOCK_HELP: Partial<Record<BlockType, string>> = {
 		prose: 'Plain text. Wrap code in `backticks` and use **double stars** for bold. A blank line starts a new paragraph.',
 		tree: 'Build the scene like in Godot. Use + to add a child node, rename it, and mark the node that holds the script.',
-		code: 'Line numbers like 2 or 1-3 mark lines as wrong or right.',
+		code: 'Tab indents and Shift+Tab outdents, like in the Godot editor. Line numbers like 2 or 1-3 mark lines as wrong or right.',
 		steps: 'Numbered steps for things to do in the editor.',
 	};
 
@@ -859,6 +859,72 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			}
 			save();
 			scheduleOutputs();
+		});
+
+		// Code fields: Tab indents, Shift+Tab outdents, Enter keeps the indent.
+		// Escape then Tab moves focus on, so the keyboard is never trapped.
+		let tabLeavesField = false;
+
+		const codeIndent = (el: HTMLTextAreaElement): string => {
+			const path = el.dataset.path ?? '';
+			if (path.includes('.csharp.')) return '    ';
+			const lang = el.closest('.block')?.querySelector<HTMLSelectElement>('select[data-path$=".lang"]')?.value;
+			return lang === 'csharp' ? '    ' : '\t';
+		};
+
+		const replaceSelection = (el: HTMLTextAreaElement, text: string, start: number, end: number, selectAfter?: [number, number]) => {
+			el.focus();
+			el.setSelectionRange(start, end);
+			if (!document.execCommand?.('insertText', false, text)) {
+				el.setRangeText(text, start, end, 'end');
+				el.dispatchEvent(new Event('input', { bubbles: true }));
+			}
+			if (selectAfter) el.setSelectionRange(selectAfter[0], selectAfter[1]);
+		};
+
+		root.addEventListener('keydown', (e) => {
+			const el = e.target as HTMLTextAreaElement;
+			if (!(el instanceof HTMLTextAreaElement) || !el.classList.contains('code')) return;
+			if (e.key === 'Escape') {
+				tabLeavesField = true;
+				return;
+			}
+			if (e.key === 'Tab' && tabLeavesField) {
+				tabLeavesField = false;
+				return;
+			}
+			tabLeavesField = false;
+			const { value, selectionStart: start, selectionEnd: end } = el;
+			const indent = codeIndent(el);
+
+			if (e.key === 'Tab') {
+				e.preventDefault();
+				const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+				if (start === end && !e.shiftKey) {
+					replaceSelection(el, indent, start, end);
+					return;
+				}
+				const lineEnd = value.indexOf('\n', end - (end > start ? 1 : 0));
+				const blockEnd = lineEnd === -1 ? value.length : lineEnd;
+				const lines = value.slice(lineStart, blockEnd).split('\n');
+				const changed = lines.map((line) => {
+					if (!e.shiftKey) return indent + line;
+					if (line.startsWith(indent)) return line.slice(indent.length);
+					return line.replace(/^(\t| {1,4})/, '');
+				});
+				const text = changed.join('\n');
+				replaceSelection(el, text, lineStart, blockEnd, [lineStart, lineStart + text.length]);
+				return;
+			}
+
+			if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+				e.preventDefault();
+				const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+				const line = value.slice(lineStart, start);
+				const current = line.match(/^[\t ]*/)![0];
+				const opensBlock = indent === '\t' ? /:\s*$/.test(line) : /\{\s*$/.test(line);
+				replaceSelection(el, '\n' + current + (opensBlock ? indent : ''), start, end);
+			}
 		});
 
 		root.addEventListener('change', (e) => {
