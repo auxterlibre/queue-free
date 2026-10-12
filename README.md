@@ -35,7 +35,7 @@ Pull requests are opened by the token's account, unless the contributor signs in
 
 With sign-in, the form forks the site under the contributor's account and opens the pull request from there, so the commit and the PR are theirs and they get contributor credit. Without these settings the sign-in option is hidden and everything still works through the token above.
 
-1. On GitHub open **Settings → Developer settings → OAuth Apps → New OAuth App**. Homepage `https://queuefree.dev`, callback URL `https://queuefree.dev/api/github/callback`.
+1. On GitHub open **Settings → Developer settings → OAuth Apps → New OAuth App**. Homepage URL `https://queuefree.dev`, Redirect URI `https://queuefree.dev/api/github/callback`. Leave wildcard matching and device flow off.
 2. Add to the Pages project as secrets: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SESSION_SECRET` (any long random string, used to seal the sign-in cookie).
 
 The sign-in asks for GitHub's `public_repo` scope, the smallest one that allows forking and opening pull requests on a public repository. The token lives only in an encrypted, HttpOnly cookie for eight hours. Optional variables: `GITHUB_REPO` (`owner/repo`, defaults to this repo) and `GITHUB_BASE` (defaults to `main`).
