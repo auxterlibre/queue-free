@@ -1,5 +1,5 @@
 import { generateMdx, pagePath } from '../../src/lib/contribute/mdx.ts';
-import { CATEGORIES, LIMITS, validateSubmission, type Submission } from '../../src/lib/contribute/schema.ts';
+import { isNewCategory, LIMITS, validateSubmission, type Categories, type Submission } from '../../src/lib/contribute/schema.ts';
 
 interface KVNamespace {
 	get(key: string): Promise<string | null>;
@@ -21,6 +21,7 @@ interface Context {
 
 const SUBMISSIONS_PER_HOUR = 5;
 const DEFAULT_REPO = 'auxterlibre/queue-free';
+const CATEGORIES_PATH = 'src/categories.json';
 
 const json = (status: number, body: unknown) =>
 	new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -62,13 +63,14 @@ function github(env: Env) {
 	};
 }
 
-function prBody(submission: Submission, path: string): string {
+function prBody(submission: Submission, path: string, categories: Categories): string {
 	const { page, contributor, notes } = submission;
+	const newCategory = isNewCategory(page, categories);
 	const lines = [
 		'Submitted through the contribute form.',
 		'',
 		`- **Type:** ${page.kind === 'error' ? 'Error page' : 'How-to page'}`,
-		`- **Category:** ${CATEGORIES[page.category]}`,
+		`- **Category:** ${newCategory ? `${page.categoryLabel.trim()} (new, folder \`${page.category}\`)` : categories[page.category]}`,
 		`- **File:** \`${path}\``,
 	];
 	if (contributor.trim()) lines.push(`- **Contributor:** ${contributor.trim()}`);
@@ -81,6 +83,11 @@ function toBase64(text: string): string {
 	let binary = '';
 	for (const b of bytes) binary += String.fromCharCode(b);
 	return btoa(binary);
+}
+
+function fromBase64(text: string): string {
+	const binary = atob(text.replace(/\n/g, ''));
+	return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
 }
 
 export async function onRequestPost({ request, env }: Context): Promise<Response> {
@@ -98,8 +105,8 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
 		return json(400, { error: 'Could not read the submission.' });
 	}
 
-	const issues = validateSubmission(submission);
-	if (issues.length) return json(422, { error: 'Some fields need attention.', issues });
+	const api = github(env);
+	const base = env.GITHUB_BASE ?? 'main';
 
 	const ip = request.headers.get('cf-connecting-ip') ?? 'unknown';
 	if (!(await turnstilePassed(env.TURNSTILE_SECRET, submission.turnstileToken ?? '', ip))) {
@@ -109,9 +116,16 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
 		return json(429, { error: 'Too many submissions from this connection. Try again in an hour.' });
 	}
 
-	const api = github(env);
-	const base = env.GITHUB_BASE ?? 'main';
-	const path = pagePath(submission.page);
+	const categoriesFile = await api<{ content: string; sha: string }>('GET', `/contents/${CATEGORIES_PATH}?ref=${base}`);
+	if (categoriesFile.status !== 200) return json(502, { error: 'Could not read the repository.' });
+	const categories = JSON.parse(fromBase64(categoriesFile.data.content)) as Categories;
+
+	const issues = validateSubmission(submission, categories);
+	if (issues.length) return json(422, { error: 'Some fields need attention.', issues });
+
+	const { page } = submission;
+	const path = pagePath(page);
+	const newCategory = isNewCategory(page, categories);
 
 	const existing = await api('GET', `/contents/${path}?ref=${base}`);
 	if (existing.status === 200) {
@@ -121,22 +135,33 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
 	const ref = await api<{ object: { sha: string } }>('GET', `/git/ref/heads/${base}`);
 	if (ref.status !== 200) return json(502, { error: 'Could not read the repository.' });
 
-	const branch = `contribute/${submission.page.slug}-${crypto.randomUUID().slice(0, 6)}`;
+	const branch = `contribute/${page.slug}-${crypto.randomUUID().slice(0, 6)}`;
 	const created = await api('POST', '/git/refs', { ref: `refs/heads/${branch}`, sha: ref.data.object.sha });
 	if (created.status !== 201) return json(502, { error: 'Could not create a branch for the page.' });
 
+	if (newCategory) {
+		const updated = { ...categories, [page.category]: page.categoryLabel.trim() };
+		const commit = await api('PUT', `/contents/${CATEGORIES_PATH}`, {
+			message: `Add the ${page.categoryLabel.trim()} category`,
+			content: toBase64(JSON.stringify(updated, null, '\t') + '\n'),
+			sha: categoriesFile.data.sha,
+			branch,
+		});
+		if (commit.status !== 200) return json(502, { error: 'Could not add the category.' });
+	}
+
 	const commit = await api('PUT', `/contents/${path}`, {
-		message: `Add ${submission.page.category}/${submission.page.slug} from the contribute form`,
-		content: toBase64(generateMdx(submission.page)),
+		message: `Add ${page.category}/${page.slug} from the contribute form`,
+		content: toBase64(generateMdx(page)),
 		branch,
 	});
 	if (commit.status !== 201) return json(502, { error: 'Could not commit the page.' });
 
 	const pr = await api<{ html_url: string; number: number }>('POST', '/pulls', {
-		title: submission.page.title.trim(),
+		title: page.title.trim(),
 		head: branch,
 		base,
-		body: prBody(submission, path),
+		body: prBody(submission, path, categories),
 	});
 	if (pr.status !== 201) return json(502, { error: 'Could not open the pull request.' });
 

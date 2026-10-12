@@ -1,15 +1,7 @@
 // Shared between the contribute form (browser) and the Pages Function that
 // turns a submission into a pull request. Keep it free of DOM and Node APIs.
 
-export const CATEGORIES = {
-	errors: 'Common errors',
-	movement: 'Movement',
-	scenes: 'Scenes',
-	signals: 'Signals',
-	saving: 'Saving',
-} as const;
-
-export type Category = keyof typeof CATEGORIES;
+export type Categories = Record<string, string>;
 export type PageKind = 'how-to' | 'error';
 export type CodeLang = 'gdscript' | 'csharp' | 'txt';
 export type CalloutKind = 'note' | 'tip' | 'caution';
@@ -39,7 +31,8 @@ export interface RelatedLink {
 
 export interface Page {
 	kind: PageKind;
-	category: Category;
+	category: string;
+	categoryLabel: string;
 	title: string;
 	description: string;
 	label: string;
@@ -80,17 +73,29 @@ const LINE_SPEC = /^\d+(-\d+)?(,\d+(-\d+)?)*$/;
 const TREE_LINE = /^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/;
 const ESM_LINE = /^(import|export)\s/m;
 
+const QUESTION_PREFIX = /^(how (do|can|should) i|how to|why (does|do|did) (it say|i get|it)|why (does|do|did)|why am i getting|why|what (is|does)|where (is|do i))\s+/i;
+const FILLER_WORDS = /\b(a|an|the|my|it|its)\b/g;
+
+// "How do I connect a signal in code?" -> "Connect a signal in code"
+export function labelFromTitle(title: string): string {
+	const text = title.trim().replace(QUESTION_PREFIX, '').replace(/[?.!]+$/, '').replace(/^["“]|["”]$/g, '').trim();
+	return text ? text[0]!.toUpperCase() + text.slice(1) : '';
+}
+
+// "Connect a signal in code" -> "connect-signal-in-code"
 export function slugify(text: string): string {
 	return text
 		.toLowerCase()
 		.replace(/[’']/g, '')
+		.replace(FILLER_WORDS, ' ')
 		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-+|-+$/g, '')
-		.replace(/^(how-do-i|how-to|how-can-i|why-does|why-is|why-do|what-is)-/, '');
+		.replace(/^-+|-+$/g, '');
 }
 
-export function isCategory(value: unknown): value is Category {
-	return typeof value === 'string' && value in CATEGORIES;
+const KEY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export function isNewCategory(page: { category: string }, known: Categories): boolean {
+	return !(page.category in known);
 }
 
 function checkText(issues: Issue[], path: string, value: unknown, max: number, required = true): value is string {
@@ -208,19 +213,23 @@ function checkBlock(issues: Issue[], path: string, value: unknown) {
 	}
 }
 
-export function validatePage(value: unknown): Issue[] {
+export function validatePage(value: unknown, known: Categories): Issue[] {
 	const issues: Issue[] = [];
 	if (!value || typeof value !== 'object') return [{ path: 'page', message: 'Missing page.' }];
 	const p = value as Record<string, unknown>;
 
 	if (p.kind !== 'how-to' && p.kind !== 'error') issues.push({ path: 'kind', message: 'Pick a page type.' });
-	if (!isCategory(p.category)) issues.push({ path: 'category', message: 'Pick a category.' });
+	if (typeof p.category !== 'string' || !KEY.test(p.category)) {
+		issues.push({ path: 'category', message: 'Use lowercase words joined by dashes, like "user-interface".' });
+	} else if (!(p.category in known)) {
+		checkText(issues, 'categoryLabel', p.categoryLabel, LIMITS.label);
+	}
 	checkText(issues, 'title', p.title, LIMITS.title);
 	checkText(issues, 'description', p.description, LIMITS.description);
 	checkText(issues, 'label', p.label, LIMITS.label);
 	checkProse(issues, 'shortAnswer', p.shortAnswer, LIMITS.shortAnswer);
 
-	if (typeof p.slug !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(p.slug)) {
+	if (typeof p.slug !== 'string' || !KEY.test(p.slug)) {
 		issues.push({ path: 'slug', message: 'Use lowercase words joined by dashes, like "connect-signal-in-code".' });
 	}
 
@@ -255,10 +264,10 @@ export function validatePage(value: unknown): Issue[] {
 	return issues;
 }
 
-export function validateSubmission(value: unknown): Issue[] {
+export function validateSubmission(value: unknown, known: Categories): Issue[] {
 	if (!value || typeof value !== 'object') return [{ path: 'submission', message: 'Missing.' }];
 	const s = value as Record<string, unknown>;
-	const issues = validatePage(s.page).map((i) => ({ ...i, path: `page.${i.path}` }));
+	const issues = validatePage(s.page, known).map((i) => ({ ...i, path: `page.${i.path}` }));
 	checkText(issues, 'contributor', s.contributor ?? '', 80, false);
 	checkText(issues, 'notes', s.notes ?? '', LIMITS.text, false);
 	return issues;

@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import rehypeInlineCode from './src/plugins/rehype-inline-code.mjs';
 import './src/styles/palette-css.mjs';
+import categories from './src/categories.json' with { type: 'json' };
 
 export default defineConfig({
 	site: 'https://queuefree.dev',
@@ -35,28 +36,10 @@ export default defineConfig({
 				ThemeSelect: './src/components/ThemeSelect.astro',
 				PageTitle: './src/components/PageTitle.astro',
 			},
-			sidebar: [
-				{
-					label: 'Common errors',
-					items: [{ autogenerate: { directory: 'errors' } }],
-				},
-				{
-					label: 'Movement',
-					items: [{ autogenerate: { directory: 'movement' } }],
-				},
-				{
-					label: 'Scenes',
-					items: [{ autogenerate: { directory: 'scenes' } }],
-				},
-				{
-					label: 'Signals',
-					items: [{ autogenerate: { directory: 'signals' } }],
-				},
-				{
-					label: 'Saving',
-					items: [{ autogenerate: { directory: 'saving' } }],
-				},
-			],
+			sidebar: Object.entries(categories).map(([directory, label]) => ({
+				label,
+				items: [{ autogenerate: { directory } }],
+			})),
 		}),
 	],
 });

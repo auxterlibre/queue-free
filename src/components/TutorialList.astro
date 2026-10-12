@@ -1,13 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 
-const sections: Record<string, string> = {
-	errors: 'Common errors',
-	movement: 'Movement',
-	scenes: 'Scenes',
-	signals: 'Signals',
-	saving: 'Saving',
-};
+import sections from '../categories.json';
 
 const docs = (await getCollection('docs')).filter((d) => d.id !== 'index');
 const groups = Object.entries(sections)

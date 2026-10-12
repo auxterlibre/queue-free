@@ -1,6 +1,6 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { CATEGORIES } from '../lib/contribute/schema.ts';
+import categories from '../categories.json';
 
 const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 ---
@@ -14,7 +14,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		lastUpdated: false,
 	}}
 >
-	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(CATEGORIES)}>
+	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(categories)}>
 		<p class="intro">
 			Fill in the form, check the preview, and send it. Your page becomes a pull request that is reviewed before it goes
 			live. No account needed.
@@ -69,11 +69,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 	import { generateMdx, pagePath } from '../lib/contribute/mdx.ts';
 	import {
 		LIMITS,
+		labelFromTitle,
 		slugify,
 		validateSubmission,
 		type Block,
 		type BlockType,
-		type Category,
+		type Categories,
 		type Issue,
 		type Page,
 		type PageKind,
@@ -87,6 +88,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		notes: string;
 		slugTouched: boolean;
 		labelTouched: boolean;
+		newCategory: boolean;
+		categoryTouched: boolean;
 	}
 
 	declare global {
@@ -170,11 +173,13 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		];
 	}
 
-	function newDraft(kind: PageKind = 'how-to'): Draft {
+	function newDraft(known: Categories, kind: PageKind = 'how-to'): Draft {
+		const firstTopic = Object.keys(known).find((k) => k !== 'errors') ?? '';
 		return {
 			page: {
 				kind,
-				category: kind === 'error' ? 'errors' : 'signals',
+				category: kind === 'error' ? 'errors' : firstTopic,
+				categoryLabel: '',
 				title: '',
 				description: '',
 				label: '',
@@ -187,18 +192,20 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 			notes: '',
 			slugTouched: false,
 			labelTouched: false,
+			newCategory: false,
+			categoryTouched: false,
 		};
 	}
 
-	function loadDraft(): Draft {
+	function loadDraft(known: Categories): Draft {
 		try {
 			const raw = localStorage.getItem(DRAFT_KEY);
 			if (raw) {
 				const d = JSON.parse(raw) as Draft;
-				if (d?.page?.blocks) return d;
+				if (d?.page?.blocks) return { ...newDraft(known), ...d, page: { ...newDraft(known).page, ...d.page } };
 			}
 		} catch {}
-		return newDraft();
+		return newDraft(known);
 	}
 
 	function getPath(obj: unknown, path: string): unknown {
@@ -307,8 +314,18 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		</div>`;
 	}
 
-	function renderForm(draft: Draft, categories: Record<string, string>): string {
+	function renderForm(draft: Draft, categories: Categories): string {
 		const { page } = draft;
+		const categoryOptions: [string, string][] = [...Object.entries(categories), ['__new__', 'New category...']];
+		const categoryPick = `<select data-pick-category>${categoryOptions
+			.map(([v, label]) => `<option value="${v}"${(draft.newCategory ? '__new__' : page.category) === v ? ' selected' : ''}>${esc(label)}</option>`)
+			.join('')}</select>`;
+		const newCategoryFields = draft.newCategory
+			? `<div class="row new-category">
+				${field('Category name', 'page.categoryLabel', input('page.categoryLabel', page.categoryLabel, `placeholder="User interface" maxlength="${LIMITS.label}"`), 'Shown in the sidebar.')}
+				${field('Folder', 'page.category', input('page.category', page.category, 'placeholder="user-interface"'), 'Part of the address.')}
+			</div>`
+			: '';
 		const kinds: [PageKind, string, string][] = [
 			['how-to', 'How do I...?', 'A task, with the scene and the script that does it.'],
 			['error', 'Why does this error...?', 'An error message, what causes it, and the fix.'],
@@ -328,9 +345,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		${field('Title', 'page.title', input('page.title', page.title, `placeholder="${page.kind === 'error' ? 'Why does it say ...?' : 'How do I ...?'}" maxlength="${LIMITS.title}"`), 'Write it as the question people search for.')}
 		${field('Description', 'page.description', textarea('page.description', page.description, 2, `maxlength="${LIMITS.description}"`), 'One sentence shown in search results.')}
 		<div class="row">
-			${field('Category', 'page.category', select('page.category', page.category, Object.entries(categories)))}
+			${field('Category', 'page.category', categoryPick)}
 			${field('Sidebar name', 'page.label', input('page.label', page.label, `maxlength="${LIMITS.label}"`), 'Short, for the menu.')}
 		</div>
+		${newCategoryFields}
 		${field('Address', 'page.slug', `<span class="slug"><span class="prefix">queuefree.dev/${esc(page.category)}/</span>${input('page.slug', page.slug)}</span>`)}
 		${field('Short answer', 'page.shortAnswer', textarea('page.shortAnswer', page.shortAnswer, 3, `maxlength="${LIMITS.shortAnswer}"`), 'One or two sentences. This is what most readers come for.')}
 
@@ -483,7 +501,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		if (root.dataset.ready) return;
 		root.dataset.ready = '1';
 
-		const categories = JSON.parse(root.dataset.categories ?? '{}') as Record<Category, string>;
+		const categories = JSON.parse(root.dataset.categories ?? '{}') as Categories;
 		const formEl = root.querySelector<HTMLElement>('#qf-form')!;
 		const previewEl = root.querySelector<HTMLElement>('#qf-preview')!;
 		const sourceEl = root.querySelector<HTMLElement>('#qf-source')!;
@@ -491,7 +509,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 		const submitBtn = root.querySelector<HTMLButtonElement>('#qf-submit')!;
 		const siteKey = root.dataset.siteKey ?? '';
 
-		let draft = loadDraft();
+		let draft = loadDraft(categories);
 		let previewTimer = 0;
 		let turnstileId: string | undefined;
 
@@ -562,7 +580,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 				notes: draft.notes,
 				turnstileToken: window.turnstile?.getResponse(turnstileId) ?? '',
 			};
-			const local = validateSubmission(submission);
+			const local = validateSubmission(submission, categories);
 			if (local.length) {
 				showIssues(local, 'A few fields need attention before sending.');
 				return;
@@ -601,18 +619,36 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 			const path = el.dataset.path;
 			if (!path) return;
 			setPath(draft, path, el.value);
-			if (path === 'page.title') {
-				if (!draft.slugTouched) {
-					draft.page.slug = slugify(el.value);
-					formEl.querySelector<HTMLInputElement>('[data-path="page.slug"]')!.value = draft.page.slug;
-				}
-			} else if (path === 'page.slug') draft.slugTouched = true;
-			else if (path === 'page.label') draft.labelTouched = true;
-			if (path === 'page.category') {
-				formEl.querySelector<HTMLElement>('.slug .prefix')!.textContent = `queuefree.dev/${el.value}/`;
+			const setField = (field: 'label' | 'slug', value: string) => {
+				draft.page[field] = value;
+				formEl.querySelector<HTMLInputElement>(`[data-path="page.${field}"]`)!.value = value;
+			};
+			if (path === 'page.title' && !draft.labelTouched) setField('label', labelFromTitle(el.value));
+			if ((path === 'page.title' || path === 'page.label') && !draft.slugTouched) setField('slug', slugify(draft.page.label));
+			if (path === 'page.slug') draft.slugTouched = true;
+			if (path === 'page.label') draft.labelTouched = true;
+			if (path === 'page.categoryLabel' && !draft.categoryTouched) {
+				draft.page.category = slugify(el.value);
+				formEl.querySelector<HTMLInputElement>('[data-path="page.category"]')!.value = draft.page.category;
+			}
+			if (path === 'page.category') draft.categoryTouched = true;
+			if (path === 'page.category' || path === 'page.categoryLabel') {
+				formEl.querySelector<HTMLElement>('.slug .prefix')!.textContent = `queuefree.dev/${draft.page.category}/`;
 			}
 			save();
 			scheduleOutputs();
+		});
+
+		root.addEventListener('change', (e) => {
+			const el = e.target as HTMLSelectElement;
+			if (!el.matches('[data-pick-category]')) return;
+			draft.newCategory = el.value === '__new__';
+			draft.page.category = draft.newCategory ? '' : el.value;
+			draft.page.categoryLabel = '';
+			draft.categoryTouched = false;
+			save();
+			renderAll();
+			if (draft.newCategory) formEl.querySelector<HTMLInputElement>('[data-path="page.categoryLabel"]')?.focus();
 		});
 
 		root.addEventListener('click', (e) => {
@@ -635,7 +671,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 					}
 					draft.page.kind = kind;
 					draft.page.blocks = templateBlocks(kind);
-					if (kind === 'error') draft.page.category = 'errors';
+					if (kind === 'error' && 'errors' in categories) {
+						draft.page.category = 'errors';
+						draft.newCategory = false;
+					}
 					break;
 				}
 				case 'add-block':
@@ -667,7 +706,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 					return;
 				case 'reset':
 					if (root.querySelector<HTMLElement>('[data-panel="done"]')!.hidden && !confirm('Clear everything and start over?')) return;
-					draft = newDraft();
+					draft = newDraft(categories);
 					localStorage.removeItem(DRAFT_KEY);
 					renderAll();
 					setMode('write');
