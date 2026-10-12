@@ -39,8 +39,12 @@
 		padding: 0;
 		border: none;
 		background: none;
-		color: var(--qf-text);
+		color: var(--qf-muted);
 		cursor: pointer;
+	}
+	button:hover,
+	button:focus-visible {
+		color: var(--qf-link);
 	}
 	.sun,
 	:global(:root[data-theme='light']) .moon {
