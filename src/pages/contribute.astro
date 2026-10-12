@@ -526,6 +526,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	// Preview rendering
 
+	// Which language the preview's code tabs show, shared by every tab group.
+	let previewLang: 'gdscript' | 'csharp' = 'gdscript';
+
 	function inlineMd(text: string): string {
 		return esc(text)
 			.replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -595,12 +598,19 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'code':
 				return codePreview(block.code, block.lang, block.filename, block.wrong, block.right);
 			case 'tabs':
-				return (
-					`<div class="qf-tabs"><div class="tab-bar"><span class="on">GDScript</span>${block.csharp.code.trim() ? '<span>C#</span>' : ''}</div>` +
-					codePreview(block.gdscript.code, 'gdscript', block.gdscript.filename) +
-					(block.csharp.code.trim() ? `<div class="tab-bar"><span>GDScript</span><span class="on">C#</span></div>` + codePreview(block.csharp.code, 'csharp', block.csharp.filename) : '') +
-					`</div>`
-				);
+				{
+					const hasCsharp = block.csharp.code.trim() !== '';
+					const open = hasCsharp ? previewLang : 'gdscript';
+					const tab = (lang: 'gdscript' | 'csharp', label: string) =>
+						`<button type="button" role="tab" data-action="preview-tab" data-lang="${lang}" aria-selected="${open === lang}">${label}</button>`;
+					const panel = (lang: 'gdscript' | 'csharp', html: string) => `<div role="tabpanel" data-tab-panel="${lang}" ${open === lang ? '' : 'hidden'}>${html}</div>`;
+					return (
+						`<div class="qf-tabs"><div class="tab-bar" role="tablist">${tab('gdscript', 'GDScript')}${hasCsharp ? tab('csharp', 'C#') : ''}</div>` +
+						panel('gdscript', codePreview(block.gdscript.code, 'gdscript', block.gdscript.filename)) +
+						(hasCsharp ? panel('csharp', codePreview(block.csharp.code, 'csharp', block.csharp.filename)) : '') +
+						`</div>`
+					);
+				}
 			case 'tree':
 				return treePreview(block.text);
 			case 'callout':
@@ -1023,6 +1033,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			const i = Number(index);
 			const blocks = draft.page.blocks;
 			switch (action) {
+				case 'preview-tab': {
+					previewLang = btn.dataset.lang as 'gdscript' | 'csharp';
+					for (const group of previewEl.querySelectorAll<HTMLElement>('.qf-tabs')) {
+						for (const t of group.querySelectorAll<HTMLElement>('[role="tab"]')) t.setAttribute('aria-selected', String(t.dataset.lang === previewLang));
+						for (const panel of group.querySelectorAll<HTMLElement>('[data-tab-panel]')) panel.hidden = panel.dataset.tabPanel !== previewLang;
+					}
+					return;
+				}
 				case 'tree-add':
 					openPicker(i, parent ?? '');
 					return;
@@ -1744,16 +1762,23 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .qf-tabs .tab-bar {
 		display: flex;
 		gap: 1rem;
-		padding: 0.25rem 0;
-		font-size: var(--sl-text-sm);
+		margin-bottom: 0.5rem;
+		border-bottom: 1px solid var(--qf-line);
+	}
+	.qf-contribute .qf-tabs [role='tab'] {
+		padding: 0.25rem 0 0.4rem;
+		margin-bottom: -1px;
+		border: 0;
+		border-bottom: 2px solid transparent;
+		background: none;
 		color: var(--qf-muted);
+		font: inherit;
+		font-size: var(--sl-text-sm);
+		cursor: pointer;
 	}
-	.qf-contribute .qf-tabs .tab-bar .on {
+	.qf-contribute .qf-tabs [role='tab'][aria-selected='true'] {
 		color: var(--qf-text);
-		border-bottom: 2px solid var(--qf-accent);
-	}
-	.qf-contribute .qf-tabs .tab-bar + .qf-pre {
-		margin-bottom: 1rem;
+		border-bottom-color: var(--qf-accent);
 	}
 	.qf-contribute .qf-tree {
 		padding: 1rem;
