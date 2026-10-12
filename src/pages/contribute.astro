@@ -65,7 +65,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		<section class="panel done" data-panel="done" hidden>
 			<h2>Sent for review</h2>
-			<p>Thanks. Your page is now a pull request. You can follow the review there:</p>
+			<p id="qf-done-text">Thanks. Your page is now a pull request. You can follow the review there:</p>
 			<p><a id="qf-pr-link" href="#" target="_blank" rel="noopener">View the pull request</a></p>
 			<button type="button" data-action="reset">Write another page</button>
 		</section>
@@ -519,6 +519,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		<button type="button" class="small" data-action="add-link">Add a link</button>
 
 		<h2>About you</h2>
+		${renderGithubCard()}
 		${field('Name or handle (optional)', 'contributor', input('contributor', draft.contributor), 'Shown on the pull request, not on the page.')}
 		${field('Notes for the reviewer (optional)', 'notes', textarea('notes', draft.notes, 2))}
 		`;
@@ -528,6 +529,31 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	// Which language the preview's code tabs show, shared by every tab group.
 	let previewLang: 'gdscript' | 'csharp' = 'gdscript';
+
+	// GitHub sign-in, optional: when available, the pull request can be the
+	// contributor's own so they get credit for it.
+	interface GithubUser {
+		login: string;
+		avatar: string;
+	}
+	let githubAvailable = false;
+	let githubUser: GithubUser | null = null;
+
+	function renderGithubCard(): string {
+		if (!githubAvailable) return '';
+		if (githubUser) {
+			return `<div class="github-card">
+				${githubUser.avatar ? `<img class="avatar" src="${esc(githubUser.avatar)}" alt="" width="32" height="32">` : ''}
+				<span class="who">Signed in as <strong>${esc(githubUser.login)}</strong>. The pull request will be opened from your account.</span>
+				<button type="button" class="small" data-action="github-logout">Sign out</button>
+			</div>`;
+		}
+		return `<div class="github-card">
+			<span class="who">Sign in with GitHub to open the pull request as yourself and get credit as a contributor. Optional.</span>
+			<a class="button-link" href="/api/github/login">Sign in with GitHub</a>
+			<span class="hint">GitHub will ask to let the form fork this site and open pull requests for you. Nothing else is stored.</span>
+		</div>`;
+	}
 
 	function inlineMd(text: string): string {
 		return esc(text)
@@ -680,6 +706,24 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			}
 		};
 
+		fetch('/api/github/me', { cache: 'no-store' })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((data: { available?: boolean; user?: GithubUser | null } | null) => {
+				if (!data) return;
+				githubAvailable = Boolean(data.available);
+				githubUser = data.user ?? null;
+				if (githubUser && !draft.contributor.trim()) {
+					draft.contributor = githubUser.login;
+					save();
+				}
+				const card = formEl.querySelector('.github-card');
+				if (githubAvailable && !card) renderAll();
+				else if (card) card.outerHTML = renderGithubCard();
+				const input = formEl.querySelector<HTMLInputElement>('[data-path="contributor"]');
+				if (input && !input.value) input.value = draft.contributor;
+			})
+			.catch(() => {});
+
 		if (codeThemes) {
 			import('../lib/contribute/highlight.ts')
 				.then((m) => m.Highlighter.create(codeThemes))
@@ -819,9 +863,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify(submission),
 				});
-				const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; issues?: Issue[] };
+				const data = (await res.json().catch(() => ({}))) as { url?: string; author?: string | null; error?: string; issues?: Issue[] };
 				if (res.status === 201 && data.url) {
 					root.querySelector<HTMLAnchorElement>('#qf-pr-link')!.href = data.url;
+					root.querySelector<HTMLElement>('#qf-done-text')!.textContent = data.author
+						? `Thanks. The pull request was opened from your GitHub account, @${data.author}. You can follow the review there:`
+						: 'Thanks. Your page is now a pull request. You can follow the review there:';
 					localStorage.removeItem(DRAFT_KEY);
 					setMode('done');
 					return;
@@ -1034,6 +1081,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			const i = Number(index);
 			const blocks = draft.page.blocks;
 			switch (action) {
+				case 'github-logout':
+					fetch('/api/github/logout', { method: 'POST' })
+						.catch(() => {})
+						.finally(() => {
+							githubUser = null;
+							renderAll();
+						});
+					return;
 				case 'preview-tab': {
 					previewLang = btn.dataset.lang as 'gdscript' | 'csharp';
 					for (const group of previewEl.querySelectorAll<HTMLElement>('.qf-tabs')) {
@@ -1492,6 +1547,38 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+
+	/* GitHub sign-in card */
+	.qf-contribute .github-card {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+	}
+	.qf-contribute .github-card .who {
+		flex: 1 1 16rem;
+	}
+	.qf-contribute .github-card .avatar {
+		border-radius: 50%;
+	}
+	.qf-contribute .github-card .hint {
+		flex-basis: 100%;
+	}
+	.qf-contribute .button-link {
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 999px;
+		color: var(--qf-text);
+		text-decoration: none;
+		font-size: var(--sl-text-sm);
+		white-space: nowrap;
+	}
+	.qf-contribute .button-link:hover {
+		border-color: var(--qf-accent);
 	}
 
 	/* Buttons */

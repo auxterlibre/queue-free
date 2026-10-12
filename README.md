@@ -29,7 +29,16 @@ Open http://localhost:4321.
 | Secret | `GITHUB_TOKEN` | Fine-grained token for this repo with **Contents: read and write** and **Pull requests: read and write** |
 | KV binding (optional) | `RATE_LIMIT` | Any KV namespace, used to cap submissions per IP |
 
-Pull requests are opened by the token's account. Optional variables: `GITHUB_REPO` (`owner/repo`, defaults to this repo) and `GITHUB_BASE` (defaults to `main`).
+Pull requests are opened by the token's account, unless the contributor signs in with GitHub.
+
+### Optional: let contributors sign in with GitHub
+
+With sign-in, the form forks the site under the contributor's account and opens the pull request from there, so the commit and the PR are theirs and they get contributor credit. Without these settings the sign-in option is hidden and everything still works through the token above.
+
+1. On GitHub open **Settings → Developer settings → OAuth Apps → New OAuth App**. Homepage `https://queuefree.dev`, callback URL `https://queuefree.dev/api/github/callback`.
+2. Add to the Pages project as secrets: `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, and `SESSION_SECRET` (any long random string, used to seal the sign-in cookie).
+
+The sign-in asks for GitHub's `public_repo` scope, the smallest one that allows forking and opening pull requests on a public repository. The token lives only in an encrypted, HttpOnly cookie for eight hours. Optional variables: `GITHUB_REPO` (`owner/repo`, defaults to this repo) and `GITHUB_BASE` (defaults to `main`).
 
 The widget's site key is public and lives in `src/pages/contribute.astro`. For local work copy `.env.example` to `.env`: it sets `PUBLIC_TURNSTILE_SITE_KEY` to Turnstile's always-pass test key, since the real widget only renders on `queuefree.dev`. Pair it with the test secret `1x0000000000000000000000000000000AA` when running the function locally.
 
