@@ -436,7 +436,9 @@ starlight-toc nav {
 }
 
 .sl-markdown-content th {
+	font-size: 1.5rem;
 	font-weight: 700;
+	line-height: var(--sl-line-height-headings);
 }
 
 .sl-markdown-content :is(th, td):last-child {

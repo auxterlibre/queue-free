@@ -1,4 +1,4 @@
-import type { Block, CodeSnippet, Page } from './schema.ts';
+import { headingAnchor, type Block, type CodeSnippet, type Page } from './schema.ts';
 
 // Escapes MDX-significant characters in prose while leaving inline code spans
 // untouched, so contributors can still write `code` and **bold**.
@@ -83,6 +83,14 @@ function renderBlock(block: Block): string {
 				return `${i + 1}. ${body}`;
 			});
 			return `<Steps>\n\n${items.join('\n\n')}\n\n</Steps>`;
+		}
+		case 'causes': {
+			const cell = (text: string) => escapeProse(text).replace(/\n+/g, ' ').replace(/\|/g, '\\|');
+			const rows = block.rows.map((r) => {
+				const section = r.section.trim();
+				return `| ${cell(r.symptom)} | [${cell(section)}](#${headingAnchor(section)}) |`;
+			});
+			return [`| What's happening | Go to |`, `|---|---|`, ...rows].join('\n');
 		}
 	}
 }

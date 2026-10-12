@@ -11,6 +11,11 @@ export interface CodeSnippet {
 	code: string;
 }
 
+export interface CauseRow {
+	symptom: string;
+	section: string;
+}
+
 export type Block =
 	| { type: 'heading'; text: string }
 	| { type: 'prose'; text: string }
@@ -19,7 +24,8 @@ export type Block =
 	| { type: 'tree'; text: string }
 	| { type: 'callout'; kind: CalloutKind; title: string; text: string }
 	| { type: 'error'; source: string; message: string }
-	| { type: 'steps'; items: string[] };
+	| { type: 'steps'; items: string[] }
+	| { type: 'causes'; rows: CauseRow[] };
 
 export type BlockType = Block['type'];
 
@@ -58,6 +64,7 @@ export const LIMITS = {
 	blocks: 40,
 	related: 8,
 	steps: 12,
+	causes: 8,
 	title: 120,
 	description: 200,
 	label: 40,
@@ -93,6 +100,26 @@ export function slugify(text: string): string {
 }
 
 const KEY = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+// Same rule rehype-slug (github-slugger) applies to the built page, so a
+// link made here lands on the heading. Inline markup is dropped first,
+// as the slugger only sees the heading's text.
+export function headingAnchor(text: string): string {
+	return text
+		.trim()
+		.replace(/[`*]/g, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{M}\p{N}\s_-]/gu, '')
+		.replace(/ /g, '-');
+}
+
+export function headingTexts(blocks: unknown): string[] {
+	if (!Array.isArray(blocks)) return [];
+	return blocks
+		.filter((b) => b && typeof b === 'object' && b.type === 'heading' && typeof b.text === 'string')
+		.map((b) => b.text.trim())
+		.filter(Boolean);
+}
 
 export function isNewCategory(page: { category: string }, known: Categories): boolean {
 	return !(page.category in known);
@@ -156,7 +183,7 @@ function checkSnippet(issues: Issue[], path: string, value: unknown, required: b
 	checkText(issues, `${path}.code`, s.code, LIMITS.code, required);
 }
 
-function checkBlock(issues: Issue[], path: string, value: unknown) {
+function checkBlock(issues: Issue[], path: string, value: unknown, headings: string[]) {
 	if (!value || typeof value !== 'object') {
 		issues.push({ path, message: 'Missing.' });
 		return;
@@ -208,6 +235,29 @@ function checkBlock(issues: Issue[], path: string, value: unknown) {
 			b.items.forEach((item, i) => checkProse(issues, `${path}.items.${i}`, item, LIMITS.text));
 			break;
 		}
+		case 'causes': {
+			if (!Array.isArray(b.rows) || !b.rows.length) {
+				issues.push({ path: `${path}.rows`, message: 'Add at least one row.' });
+				break;
+			}
+			if (b.rows.length > LIMITS.causes) {
+				issues.push({ path: `${path}.rows`, message: `Too many rows (max ${LIMITS.causes}).` });
+				break;
+			}
+			b.rows.forEach((row, i) => {
+				const rowPath = `${path}.rows.${i}`;
+				if (!row || typeof row !== 'object') {
+					issues.push({ path: rowPath, message: 'Missing.' });
+					return;
+				}
+				const r = row as Record<string, unknown>;
+				checkProse(issues, `${rowPath}.symptom`, r.symptom, LIMITS.description);
+				if (typeof r.section !== 'string' || !headings.includes(r.section.trim())) {
+					issues.push({ path: `${rowPath}.section`, message: 'Pick a section heading from this page.' });
+				}
+			});
+			break;
+		}
 		default:
 			issues.push({ path: `${path}.type`, message: 'Unknown block type.' });
 	}
@@ -238,7 +288,8 @@ export function validatePage(value: unknown, known: Categories): Issue[] {
 	} else if (p.blocks.length > LIMITS.blocks) {
 		issues.push({ path: 'blocks', message: `Too many blocks (max ${LIMITS.blocks}).` });
 	} else {
-		p.blocks.forEach((b, i) => checkBlock(issues, `blocks.${i}`, b));
+		const headings = headingTexts(p.blocks);
+		p.blocks.forEach((b, i) => checkBlock(issues, `blocks.${i}`, b, headings));
 	}
 
 	if (!Array.isArray(p.related)) {
