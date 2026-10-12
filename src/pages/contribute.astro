@@ -1,6 +1,7 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import categories from '../categories.json';
+import { NODE_GROUPS } from '../lib/contribute/godot-nodes.ts';
 
 // The site key is public. The local .env swaps in Turnstile's always-pass
 // test key, since the real widget only renders on queuefree.dev.
@@ -16,7 +17,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		lastUpdated: false,
 	}}
 >
-	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(categories)}>
+	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(categories)} data-node-groups={JSON.stringify(NODE_GROUPS)}>
 		<p class="intro">
 			Fill in the form, check the preview, and send it. Your page becomes a pull request that is reviewed before it goes
 			live. No account needed.
@@ -64,6 +65,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			<p><a id="qf-pr-link" href="#" target="_blank" rel="noopener">View the pull request</a></p>
 			<button type="button" data-action="reset">Write another page</button>
 		</section>
+
+		<dialog class="node-picker" id="qf-node-picker" aria-label="Create new node">
+			<div class="picker-head">
+				<input type="search" id="qf-node-search" placeholder="Search nodes" autocomplete="off" spellcheck="false" />
+				<button type="button" class="small" data-action="tree-cancel">Cancel</button>
+			</div>
+			<div class="picker-list" id="qf-node-list"></div>
+		</dialog>
 	</div>
 </StarlightPage>
 
@@ -121,7 +130,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	const BLOCK_HELP: Partial<Record<BlockType, string>> = {
 		prose: 'Plain text. Wrap code in `backticks` and use **double stars** for bold. A blank line starts a new paragraph.',
-		tree: 'One node per line, written as Name: Type. Indent children with two spaces. Add [script] after a node that has a script, and a note in "quotes".',
+		tree: 'Build the scene like in Godot. Use + to add a child node, rename it, and mark the node that holds the script.',
 		code: 'Line numbers like 2 or 1-3 mark lines as wrong or right.',
 		steps: 'Numbered steps for things to do in the editor.',
 	};
@@ -223,6 +232,125 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		target[last] = value;
 	}
 
+	// Scene tree: the block stores the text form, the editor works on nodes.
+
+	interface TreeNode {
+		name: string;
+		type: string;
+		script: boolean;
+		unique: boolean;
+		note: string;
+		children: TreeNode[];
+	}
+
+	const TREE_LINE = /^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/;
+	const treeTextMode = new Set<number>();
+
+	function parseTree(text: string): TreeNode[] | null {
+		const lines = text.split('\n').filter((l) => l.trim());
+		if (!lines.length) return [];
+		const base = Math.min(...lines.map((l) => l.match(/^\s*/)![0].length));
+		const roots: TreeNode[] = [];
+		const stack: { depth: number; node: TreeNode }[] = [];
+		for (const line of lines) {
+			const m = line.match(TREE_LINE);
+			if (!m) return null;
+			const depth = Math.floor((m[1]!.length - base) / 2);
+			const node: TreeNode = {
+				name: m[2]!,
+				type: m[3] ?? 'Node',
+				script: m[4]!.includes('[script]'),
+				unique: m[4]!.includes('[unique]'),
+				note: m[5] ?? '',
+				children: [],
+			};
+			while (stack.length && stack[stack.length - 1]!.depth >= depth) stack.pop();
+			(stack.length ? stack[stack.length - 1]!.node.children : roots).push(node);
+			stack.push({ depth, node });
+		}
+		return roots;
+	}
+
+	function serializeTree(nodes: TreeNode[], depth = 0): string {
+		return nodes
+			.map((n) => {
+				const flags = (n.script ? ' [script]' : '') + (n.unique ? ' [unique]' : '');
+				const note = n.note.trim() ? ` "${n.note.trim()}"` : '';
+				const line = `${'  '.repeat(depth)}${n.name}: ${n.type}${flags}${note}`;
+				return n.children.length ? line + '\n' + serializeTree(n.children, depth + 1) : line;
+			})
+			.join('\n');
+	}
+
+	function treeSiblings(roots: TreeNode[], path: string): TreeNode[] {
+		if (!path) return roots;
+		let list = roots;
+		for (const index of path.split('.')) list = list[Number(index)]!.children;
+		return list;
+	}
+
+	function treeNodeAt(roots: TreeNode[], path: string): TreeNode {
+		const indexes = path.split('.').map(Number);
+		const last = indexes.pop()!;
+		let list = roots;
+		for (const index of indexes) list = list[index]!.children;
+		return list[last]!;
+	}
+
+	function uniqueNodeName(siblings: TreeNode[], type: string): string {
+		const taken = new Set(siblings.map((n) => n.name));
+		if (!taken.has(type)) return type;
+		let n = 2;
+		while (taken.has(`${type}${n}`)) n++;
+		return `${type}${n}`;
+	}
+
+	const icon = (type: string) => `/godot-editor-icons/${esc(type)}.svg`;
+
+	function renderTreeList(nodes: TreeNode[], block: number, parentPath: string): string {
+		const items = nodes.map((n, j) => {
+			const path = parentPath ? `${parentPath}.${j}` : `${j}`;
+			const toggle = (fieldName: 'script' | 'unique', on: boolean, iconName: string, title: string) =>
+				`<button type="button" class="tree-flag" data-action="tree-toggle" data-index="${block}" data-tree-path="${path}" data-field="${fieldName}" aria-pressed="${on}" title="${title}"><img src="${icon(iconName)}" alt="" width="16" height="16"></button>`;
+			return `<li>
+				<div class="tree-row">
+					<img class="tree-icon" src="${icon(n.type)}" alt="" width="16" height="16" onerror="this.style.visibility='hidden'">
+					<input type="text" class="tree-name" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="name" value="${esc(n.name)}" aria-label="Node name">
+					<span class="tree-type">${esc(n.type)}</span>
+					${toggle('script', n.script, 'Script', 'Has a script')}
+					${toggle('unique', n.unique, 'SceneUniqueName', 'Access as unique name (%)')}
+					<input type="text" class="tree-note" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="note" value="${esc(n.note)}" placeholder="Note" aria-label="Note">
+					<span class="tree-tools">
+						<button type="button" class="small" data-action="tree-add" data-index="${block}" data-parent="${path}" title="Add child node">+</button>
+						<button type="button" class="small" data-action="tree-move" data-index="${block}" data-tree-path="${path}" data-dir="-1" ${j === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+						<button type="button" class="small" data-action="tree-move" data-index="${block}" data-tree-path="${path}" data-dir="1" ${j === nodes.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+						<button type="button" class="small" data-action="tree-remove" data-index="${block}" data-tree-path="${path}" aria-label="Remove node">✕</button>
+					</span>
+				</div>
+				${n.children.length ? renderTreeList(n.children, block, path) : ''}
+			</li>`;
+		});
+		return `<ul class="tree-list">${items.join('')}</ul>`;
+	}
+
+	function renderTreeEditor(block: number, text: string): string {
+		const nodes = treeTextMode.has(block) ? null : parseTree(text);
+		if (!nodes) {
+			const note = treeTextMode.has(block) ? '' : `<span class="error">Could not read this tree. Fix it here or clear it.</span>`;
+			return (
+				field('Nodes', `page.blocks.${block}.text`, textarea(`page.blocks.${block}.text`, text, 5, 'class="code" spellcheck="false"'), 'One node per line as Name: Type, children indented by two spaces.') +
+				note +
+				`<div class="tree-foot"><button type="button" class="small" data-action="tree-visual" data-index="${block}">Back to the visual editor</button></div>`
+			);
+		}
+		const body = nodes.length
+			? renderTreeList(nodes, block, '')
+			: `<button type="button" class="small" data-action="tree-add" data-index="${block}" data-parent="">Add root node</button>`;
+		return `<div class="tree-editor">${body}</div>
+			<div class="tree-foot"><button type="button" class="small" data-action="tree-text" data-index="${block}">Edit as text</button></div>
+			<span class="error" data-error-for="page.blocks.${block}.text"></span>`;
+	}
+
 	// Form rendering
 
 	const field = (label: string, path: string, control: string, hint = '') =>
@@ -274,7 +402,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 					`<div class="sub">${codeFields(`${p}.csharp`, block.csharp, 'C# (optional)')}</div>`;
 				break;
 			case 'tree':
-				body = field('Nodes', `${p}.text`, textarea(`${p}.text`, block.text, 5, 'class="code" spellcheck="false"'));
+				body = renderTreeEditor(i, block.text);
 				break;
 			case 'callout':
 				body =
@@ -506,6 +634,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		root.dataset.ready = '1';
 
 		const categories = JSON.parse(root.dataset.categories ?? '{}') as Categories;
+		const nodeGroups = JSON.parse(root.dataset.nodeGroups ?? '[]') as { label: string; types: string[] }[];
+		const picker = root.querySelector<HTMLDialogElement>('#qf-node-picker')!;
+		const pickerSearch = root.querySelector<HTMLInputElement>('#qf-node-search')!;
+		const pickerList = root.querySelector<HTMLElement>('#qf-node-list')!;
+		let pickerTarget: { block: number; parent: string } | null = null;
 		const formEl = root.querySelector<HTMLElement>('#qf-form')!;
 		const previewEl = root.querySelector<HTMLElement>('#qf-preview')!;
 		const sourceEl = root.querySelector<HTMLElement>('#qf-source')!;
@@ -624,8 +757,80 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			}
 		};
 
+		const treeBlock = (index: number) => draft.page.blocks[index] as { type: 'tree'; text: string };
+
+		const editTree = (index: number, edit: (roots: TreeNode[]) => void) => {
+			const roots = parseTree(treeBlock(index).text);
+			if (!roots) return;
+			edit(roots);
+			treeBlock(index).text = serializeTree(roots);
+			save();
+			scheduleOutputs();
+		};
+
+		const renderPicker = () => {
+			const query = pickerSearch.value.trim().toLowerCase();
+			const groups = nodeGroups
+				.map((g) => ({ label: g.label, types: g.types.filter((t) => t.toLowerCase().includes(query)) }))
+				.filter((g) => g.types.length);
+			pickerList.innerHTML = groups.length
+				? groups
+						.map(
+							(g) => `<h3>${esc(g.label)}</h3><div class="picker-grid">${g.types
+								.map((t) => `<button type="button" data-action="tree-pick" data-type="${esc(t)}"><img src="${icon(t)}" alt="" width="16" height="16"><span>${esc(t)}</span></button>`)
+								.join('')}</div>`,
+						)
+						.join('')
+				: `<p class="hint">No node matches "${esc(pickerSearch.value)}".</p>`;
+		};
+
+		const openPicker = (block: number, parent: string) => {
+			pickerTarget = { block, parent };
+			pickerSearch.value = '';
+			renderPicker();
+			picker.showModal();
+			pickerSearch.focus();
+		};
+
+		const pickNode = (type: string) => {
+			if (!pickerTarget) return;
+			const { block, parent } = pickerTarget;
+			let added = '';
+			editTree(block, (roots) => {
+				const siblings = treeSiblings(roots, parent);
+				siblings.push({ name: uniqueNodeName(siblings, type), type, script: false, unique: false, note: '', children: [] });
+				added = parent ? `${parent}.${siblings.length - 1}` : `${siblings.length - 1}`;
+			});
+			picker.close();
+			pickerTarget = null;
+			renderAll();
+			const nameInput = formEl.querySelector<HTMLInputElement>(`[data-tree-block="${block}"][data-tree-path="${added}"][data-tree-field="name"]`);
+			nameInput?.focus();
+			nameInput?.select();
+		};
+
+		pickerSearch.addEventListener('input', renderPicker);
+		pickerSearch.addEventListener('keydown', (e) => {
+			if (e.key !== 'Enter') return;
+			e.preventDefault();
+			const first = pickerList.querySelector<HTMLElement>('[data-action="tree-pick"]');
+			if (first) pickNode(first.dataset.type!);
+		});
+		picker.addEventListener('click', (e) => {
+			if (e.target === picker) picker.close();
+		});
+
 		root.addEventListener('input', (e) => {
 			const el = e.target as HTMLInputElement | HTMLTextAreaElement;
+			if (el.dataset.treeField) {
+				const field = el.dataset.treeField as 'name' | 'note';
+				const clean = field === 'name' ? el.value.replace(/[:"\[\]]/g, '') : el.value.replace(/"/g, '');
+				if (clean !== el.value) el.value = clean;
+				editTree(Number(el.dataset.treeBlock), (roots) => {
+					treeNodeAt(roots, el.dataset.treePath!)[field] = clean;
+				});
+				return;
+			}
 			const path = el.dataset.path;
 			if (!path) return;
 			setPath(draft, path, el.value);
@@ -664,10 +869,49 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		root.addEventListener('click', (e) => {
 			const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
 			if (!btn) return;
-			const { action, index, type, dir, item, mode, value } = btn.dataset;
+			const { action, index, type, dir, item, mode, value, treePath, field: flag, parent } = btn.dataset;
 			const i = Number(index);
 			const blocks = draft.page.blocks;
 			switch (action) {
+				case 'tree-add':
+					openPicker(i, parent ?? '');
+					return;
+				case 'tree-pick':
+					pickNode(type!);
+					return;
+				case 'tree-cancel':
+					picker.close();
+					return;
+				case 'tree-toggle':
+					editTree(i, (roots) => {
+						const node = treeNodeAt(roots, treePath!);
+						node[flag as 'script' | 'unique'] = !node[flag as 'script' | 'unique'];
+					});
+					btn.setAttribute('aria-pressed', String(btn.getAttribute('aria-pressed') !== 'true'));
+					return;
+				case 'tree-remove':
+					editTree(i, (roots) => {
+						const indexes = treePath!.split('.').map(Number);
+						const last = indexes.pop()!;
+						treeSiblings(roots, indexes.join('.')).splice(last, 1);
+					});
+					break;
+				case 'tree-move':
+					editTree(i, (roots) => {
+						const indexes = treePath!.split('.').map(Number);
+						const from = indexes.pop()!;
+						const to = from + Number(dir);
+						const siblings = treeSiblings(roots, indexes.join('.'));
+						if (to < 0 || to >= siblings.length) return;
+						[siblings[from], siblings[to]] = [siblings[to]!, siblings[from]!];
+					});
+					break;
+				case 'tree-text':
+					treeTextMode.add(i);
+					break;
+				case 'tree-visual':
+					treeTextMode.delete(i);
+					break;
 				case 'set-mode':
 					setMode(mode as Mode);
 					return;
@@ -1057,6 +1301,161 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .done h2 {
 		margin: 0;
+	}
+
+	/* Scene tree editor */
+	.qf-contribute .tree-editor {
+		padding: 0.75rem;
+		border-radius: 0.5rem;
+		background: var(--qf-frame-tree);
+		color: var(--qf-code-default);
+		overflow-x: auto;
+	}
+	.qf-contribute .tree-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.qf-contribute .tree-list .tree-list {
+		margin-left: 8px;
+		padding-left: 14px;
+		border-left: 1px solid var(--qf-frame-line);
+	}
+	.qf-contribute .tree-row {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.15rem 0;
+		min-width: max-content;
+	}
+	.qf-contribute .tree-row input[type='text'] {
+		width: auto;
+		padding: 0.2rem 0.45rem;
+		border-color: transparent;
+		background: transparent;
+		font-size: var(--sl-text-sm);
+		color: inherit;
+	}
+	.qf-contribute .tree-row input[type='text']:hover,
+	.qf-contribute .tree-row input[type='text']:focus-visible {
+		border-color: var(--qf-frame-line);
+		background: var(--qf-bg);
+	}
+	.qf-contribute .tree-name {
+		width: 10rem !important;
+		font-weight: 600;
+	}
+	.qf-contribute .tree-type {
+		color: var(--qf-frame-muted);
+		font-size: var(--sl-text-xs);
+		white-space: nowrap;
+	}
+	.qf-contribute .tree-note {
+		width: 11rem !important;
+		font-style: italic;
+	}
+	.qf-contribute .tree-note:not(:placeholder-shown) {
+		background: var(--qf-frame-note);
+		color: #1a1a1a;
+		border-color: transparent;
+	}
+	.qf-contribute .tree-flag {
+		display: inline-flex;
+		padding: 0.2rem;
+		border: 1px solid transparent;
+		border-radius: 0.25rem;
+		background: none;
+		opacity: 0.3;
+	}
+	.qf-contribute .tree-flag[aria-pressed='true'] {
+		opacity: 1;
+		border-color: var(--qf-frame-line);
+		background: var(--qf-bg);
+	}
+	.qf-contribute .tree-flag:hover {
+		opacity: 0.8;
+	}
+	.qf-contribute .tree-tools {
+		display: inline-flex;
+		gap: 0.15rem;
+		margin-left: auto;
+		padding-left: 0.5rem;
+	}
+	.qf-contribute .tree-tools .small {
+		padding: 0.15rem 0.5rem;
+		line-height: 1.2;
+	}
+	.qf-contribute .tree-foot {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	/* Create new node dialog */
+	.qf-contribute .node-picker {
+		width: min(32rem, calc(100vw - 2rem));
+		max-height: min(34rem, calc(100vh - 2rem));
+		margin: auto;
+		padding: 0;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.75rem;
+		background: var(--qf-bg);
+		color: var(--qf-text);
+		display: none;
+		flex-direction: column;
+	}
+	.qf-contribute .node-picker[open] {
+		display: flex;
+	}
+	.qf-contribute .node-picker::backdrop {
+		background: rgb(0 0 0 / 0.5);
+	}
+	.qf-contribute .picker-head {
+		display: flex;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		border-bottom: 1px solid var(--qf-line);
+	}
+	.qf-contribute .picker-head input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+		background: var(--qf-surface);
+		color: var(--qf-text);
+		font: inherit;
+	}
+	.qf-contribute .picker-list {
+		overflow-y: auto;
+		padding: 0.5rem 0.75rem 0.75rem;
+	}
+	.qf-contribute .picker-list h3 {
+		margin: 0.75rem 0 0.35rem;
+		font-size: var(--sl-text-xs);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--qf-muted);
+	}
+	.qf-contribute .picker-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		gap: 0.15rem;
+	}
+	.qf-contribute .picker-grid button {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0.5rem;
+		border: 0;
+		border-radius: 0.375rem;
+		background: none;
+		color: var(--qf-text);
+		text-align: left;
+		font-size: var(--sl-text-sm);
+	}
+	.qf-contribute .picker-grid button:hover,
+	.qf-contribute .picker-grid button:focus-visible {
+		background: var(--qf-surface);
 	}
 
 	/* Preview: approximations of the site's components */
