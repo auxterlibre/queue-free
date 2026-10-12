@@ -307,18 +307,19 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	const icon = (type: string) => `/godot-editor-icons/${esc(type)}.svg`;
 
-	function renderTreeList(nodes: TreeNode[], block: number, parentPath: string): string {
-		const items = nodes.map((n, j) => {
-			const path = parentPath ? `${parentPath}.${j}` : `${j}`;
-			const toggle = (fieldName: 'script' | 'unique', on: boolean, iconName: string, title: string) =>
-				`<button type="button" class="tree-flag" data-action="tree-toggle" data-index="${block}" data-tree-path="${path}" data-field="${fieldName}" aria-pressed="${on}" title="${title}"><img src="${icon(iconName)}" alt="" width="16" height="16"></button>`;
-			return `<li>
-				<div class="tree-row">
-					<img class="tree-icon" src="${icon(n.type)}" alt="" width="16" height="16" onerror="this.style.visibility='hidden'">
-					<input type="text" class="tree-name" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="name" value="${esc(n.name)}" aria-label="Node name">
+	function renderTreeRows(nodes: TreeNode[], block: number, parentPath: string, depth: number): string {
+		return nodes
+			.map((n, j) => {
+				const path = parentPath ? `${parentPath}.${j}` : `${j}`;
+				const toggle = (fieldName: 'script' | 'unique', on: boolean, iconName: string, title: string) =>
+					`<button type="button" class="tree-flag" data-action="tree-toggle" data-index="${block}" data-tree-path="${path}" data-field="${fieldName}" aria-pressed="${on}" title="${title}"><img src="${icon(iconName)}" alt="" width="16" height="16"></button>`;
+				const row = `<div class="tree-row">
+					<span class="tree-head" style="--depth: ${depth}">
+						<img class="tree-icon" src="${icon(n.type)}" alt="" width="16" height="16" onerror="this.style.visibility='hidden'">
+						<input type="text" class="tree-name" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="name" value="${esc(n.name)}" aria-label="Node name">
+					</span>
 					<span class="tree-type">${esc(n.type)}</span>
-					${toggle('script', n.script, 'Script', 'Has a script')}
-					${toggle('unique', n.unique, 'SceneUniqueName', 'Access as unique name (%)')}
+					<span class="tree-flags">${toggle('script', n.script, 'Script', 'Has a script')}${toggle('unique', n.unique, 'SceneUniqueName', 'Access as unique name (%)')}</span>
 					<input type="text" class="tree-note" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="note" value="${esc(n.note)}" placeholder="Note" aria-label="Note">
 					<span class="tree-tools">
 						<button type="button" class="small" data-action="tree-add" data-index="${block}" data-parent="${path}" title="Add child node">+</button>
@@ -326,11 +327,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 						<button type="button" class="small" data-action="tree-move" data-index="${block}" data-tree-path="${path}" data-dir="1" ${j === nodes.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
 						<button type="button" class="small" data-action="tree-remove" data-index="${block}" data-tree-path="${path}" aria-label="Remove node">✕</button>
 					</span>
-				</div>
-				${n.children.length ? renderTreeList(n.children, block, path) : ''}
-			</li>`;
-		});
-		return `<ul class="tree-list">${items.join('')}</ul>`;
+				</div>`;
+				return row + renderTreeRows(n.children, block, path, depth + 1);
+			})
+			.join('');
 	}
 
 	function renderTreeEditor(block: number, text: string): string {
@@ -344,7 +344,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			);
 		}
 		const body = nodes.length
-			? renderTreeList(nodes, block, '')
+			? `<div class="tree-grid">${renderTreeRows(nodes, block, '', 0)}</div>`
 			: `<button type="button" class="small" data-action="tree-add" data-index="${block}" data-parent="">Add root node</button>`;
 		return `<div class="tree-editor">${body}</div>
 			<div class="tree-foot"><button type="button" class="small" data-action="tree-text" data-index="${block}">Edit as text</button></div>
@@ -1311,22 +1311,22 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		color: var(--qf-code-default);
 		overflow-x: auto;
 	}
-	.qf-contribute .tree-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.qf-contribute .tree-list .tree-list {
-		margin-left: 8px;
-		padding-left: 14px;
-		border-left: 1px solid var(--qf-frame-line);
+	.qf-contribute .tree-grid {
+		display: grid;
+		grid-template-columns: minmax(9rem, max-content) max-content max-content minmax(5rem, 1fr) max-content;
+		column-gap: 0.5rem;
+		row-gap: 0.2rem;
+		align-items: center;
 	}
 	.qf-contribute .tree-row {
+		display: contents;
+	}
+	.qf-contribute .tree-head {
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
-		padding: 0.15rem 0;
-		min-width: max-content;
+		min-width: 0;
+		padding-left: calc(var(--depth) * 1.25rem);
 	}
 	.qf-contribute .tree-row input[type='text'] {
 		width: auto;
@@ -1342,7 +1342,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		background: var(--qf-bg);
 	}
 	.qf-contribute .tree-name {
-		width: 10rem !important;
+		flex: 1;
+		width: 100% !important;
+		min-width: 5rem;
 		font-weight: 600;
 	}
 	.qf-contribute .tree-type {
@@ -1351,10 +1353,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		white-space: nowrap;
 	}
 	.qf-contribute .tree-note {
-		width: 11rem !important;
+		width: 100% !important;
+		min-width: 0;
 		font-style: italic;
 	}
-	.qf-contribute .tree-note:not(:placeholder-shown) {
+	.qf-contribute .tree-row input.tree-note:not(:placeholder-shown) {
 		background: var(--qf-frame-note);
 		color: #1a1a1a;
 		border-color: transparent;
@@ -1375,10 +1378,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .tree-flag:hover {
 		opacity: 0.8;
 	}
+	.qf-contribute .tree-flags {
+		display: inline-flex;
+		gap: 0.15rem;
+	}
 	.qf-contribute .tree-tools {
 		display: inline-flex;
 		gap: 0.15rem;
-		margin-left: auto;
+		justify-self: end;
 		padding-left: 0.5rem;
 	}
 	.qf-contribute .tree-tools .small {
