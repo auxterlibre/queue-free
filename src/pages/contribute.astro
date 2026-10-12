@@ -22,10 +22,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			live. No account needed.
 		</p>
 
-		<div class="modes" role="tablist">
-			<button type="button" data-action="set-mode" data-mode="write" aria-selected="true">Write</button>
-			<button type="button" data-action="set-mode" data-mode="preview" aria-selected="false">Preview</button>
-			<button type="button" data-action="set-mode" data-mode="source" aria-selected="false">Source</button>
+		<div class="modes-bar">
+			<div class="modes" role="tablist">
+				<button type="button" data-action="set-mode" data-mode="write" aria-selected="true">Write</button>
+				<button type="button" data-action="set-mode" data-mode="preview" aria-selected="false">Preview</button>
+				<button type="button" data-action="set-mode" data-mode="source" aria-selected="false">Source</button>
+			</div>
 		</div>
 
 		<section class="panel" data-panel="write">
@@ -776,7 +778,15 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		margin-top: 1.5rem;
 	}
 
-	/* Mode switch */
+	/* Mode switch, pinned under the site header while the page scrolls */
+	.qf-contribute .modes-bar {
+		position: sticky;
+		top: var(--sl-nav-height);
+		z-index: 2;
+		margin-inline: calc(-1 * var(--sl-content-pad-x));
+		padding: 0.5rem var(--sl-content-pad-x);
+		background: var(--qf-bg);
+	}
 	.qf-contribute .modes {
 		display: flex;
 		gap: 0.25rem;
