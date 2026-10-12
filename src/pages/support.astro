@@ -6,7 +6,7 @@ import { KOFI_URL } from '../site.ts';
 <StarlightPage
 	hasSidebar={false}
 	frontmatter={{
-		title: 'Support Queue Free',
+		title: 'Support this initiative',
 		description: 'Queue Free is free and has no ads. If it saved you time, a small donation or a new page helps.',
 		tableOfContents: false,
 		pagefind: false,
@@ -27,18 +27,30 @@ import { KOFI_URL } from '../site.ts';
 			<img src="/kofi-heart.webp" alt="" width="48" height="48" />
 			Support me on Ko-Fi
 		</a>
-		<p class="hint">Ko-fi handles the payment. Queue Free never sees your card details.</p>
 	</div>
 </StarlightPage>
 
 <style is:global>
 	html:root:has(.qf-support) {
-		--sl-content-width: 40rem;
+		--sl-content-width: 35rem;
+	}
+	:root:has(.qf-support) .content-panel {
+		padding-top: 5rem;
+		padding-bottom: 0;
+	}
+	:root:has(.qf-support) .content-panel + .content-panel {
+		padding-top: 1.5rem;
+		border-top: 0;
+	}
+	:root:has(.qf-support) .content-panel h1 {
+		margin-top: 0;
+		font-size: 2rem;
+		line-height: 1.5rem;
 	}
 	.qf-support {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 1.5rem;
 	}
 	.qf-support p {
 		margin: 0;
@@ -48,6 +60,7 @@ import { KOFI_URL } from '../site.ts';
 		align-items: center;
 		gap: 1rem;
 		align-self: flex-start;
+		margin-top: 1.5rem;
 		padding: 0.5rem 2rem 0.5rem 1rem;
 		border-radius: 46px;
 		background: var(--qf-accent);
@@ -68,11 +81,8 @@ import { KOFI_URL } from '../site.ts';
 	.qf-support .kofi:active {
 		background: linear-gradient(to right, #bf6b47, #7533a8);
 	}
-	.qf-support .hint {
-		color: var(--qf-muted);
-		font-size: var(--sl-text-sm);
-	}
-	.qf-support a {
-		color: var(--qf-link);
+	.qf-support p a {
+		color: inherit;
+		text-decoration: underline;
 	}
 </style>
