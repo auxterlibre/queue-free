@@ -35,6 +35,7 @@ export default defineConfig({
 				Sidebar: './src/components/Sidebar.astro',
 				ThemeSelect: './src/components/ThemeSelect.astro',
 				PageTitle: './src/components/PageTitle.astro',
+				Footer: './src/components/Footer.astro',
 			},
 			sidebar: Object.entries(categories).map(([directory, label]) => ({
 				label,
