@@ -1,0 +1,265 @@
+// Shared between the contribute form (browser) and the Pages Function that
+// turns a submission into a pull request. Keep it free of DOM and Node APIs.
+
+export const CATEGORIES = {
+	errors: 'Common errors',
+	movement: 'Movement',
+	scenes: 'Scenes',
+	signals: 'Signals',
+	saving: 'Saving',
+} as const;
+
+export type Category = keyof typeof CATEGORIES;
+export type PageKind = 'how-to' | 'error';
+export type CodeLang = 'gdscript' | 'csharp' | 'txt';
+export type CalloutKind = 'note' | 'tip' | 'caution';
+
+export interface CodeSnippet {
+	filename: string;
+	code: string;
+}
+
+export type Block =
+	| { type: 'heading'; text: string }
+	| { type: 'prose'; text: string }
+	| { type: 'code'; lang: CodeLang; filename: string; code: string; wrong: string; right: string }
+	| { type: 'tabs'; gdscript: CodeSnippet; csharp: CodeSnippet }
+	| { type: 'tree'; text: string }
+	| { type: 'callout'; kind: CalloutKind; title: string; text: string }
+	| { type: 'error'; source: string; message: string }
+	| { type: 'steps'; items: string[] };
+
+export type BlockType = Block['type'];
+
+export interface RelatedLink {
+	title: string;
+	description: string;
+	href: string;
+}
+
+export interface Page {
+	kind: PageKind;
+	category: Category;
+	title: string;
+	description: string;
+	label: string;
+	slug: string;
+	shortAnswer: string;
+	blocks: Block[];
+	related: RelatedLink[];
+}
+
+export interface Submission {
+	page: Page;
+	contributor: string;
+	notes: string;
+	turnstileToken: string;
+}
+
+export interface Issue {
+	path: string;
+	message: string;
+}
+
+export const LIMITS = {
+	blocks: 40,
+	related: 8,
+	steps: 12,
+	title: 120,
+	description: 200,
+	label: 40,
+	shortAnswer: 400,
+	text: 4000,
+	code: 6000,
+	tree: 2000,
+	bodyBytes: 64 * 1024,
+};
+
+const LINE_SPEC = /^\d+(-\d+)?(,\d+(-\d+)?)*$/;
+// Same shape SceneTree.astro accepts; a line that fails here fails the build.
+const TREE_LINE = /^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/;
+const ESM_LINE = /^(import|export)\s/m;
+
+export function slugify(text: string): string {
+	return text
+		.toLowerCase()
+		.replace(/[’']/g, '')
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-+|-+$/g, '')
+		.replace(/^(how-do-i|how-to|how-can-i|why-does|why-is|why-do|what-is)-/, '');
+}
+
+export function isCategory(value: unknown): value is Category {
+	return typeof value === 'string' && value in CATEGORIES;
+}
+
+function checkText(issues: Issue[], path: string, value: unknown, max: number, required = true): value is string {
+	if (typeof value !== 'string') {
+		issues.push({ path, message: 'Missing.' });
+		return false;
+	}
+	if (required && !value.trim()) {
+		issues.push({ path, message: 'This is required.' });
+		return false;
+	}
+	if (value.length > max) {
+		issues.push({ path, message: `Too long (max ${max} characters).` });
+		return false;
+	}
+	return true;
+}
+
+function checkProse(issues: Issue[], path: string, value: unknown, max: number, required = true) {
+	if (!checkText(issues, path, value, max, required)) return;
+	if (ESM_LINE.test(value)) {
+		issues.push({ path, message: 'A line cannot start with the word "import" or "export". Reword it.' });
+	}
+}
+
+function checkTree(issues: Issue[], path: string, value: unknown) {
+	if (!checkText(issues, path, value, LIMITS.tree)) return;
+	const lines = value.split('\n').filter((l) => l.trim());
+	if (!lines.length) {
+		issues.push({ path, message: 'Add at least one node.' });
+		return;
+	}
+	for (const line of lines) {
+		if (!TREE_LINE.test(line)) {
+			issues.push({ path, message: `Can't read the line "${line.trim()}". Use "Name: Type".` });
+			return;
+		}
+	}
+}
+
+function checkLineSpec(issues: Issue[], path: string, value: unknown) {
+	if (typeof value !== 'string') {
+		issues.push({ path, message: 'Missing.' });
+		return;
+	}
+	if (value.trim() && !LINE_SPEC.test(value.trim())) {
+		issues.push({ path, message: 'Use line numbers like "2" or "1-3,5".' });
+	}
+}
+
+function checkSnippet(issues: Issue[], path: string, value: unknown, required: boolean) {
+	if (!value || typeof value !== 'object') {
+		issues.push({ path, message: 'Missing.' });
+		return;
+	}
+	const s = value as Record<string, unknown>;
+	checkText(issues, `${path}.filename`, s.filename, 80, false);
+	checkText(issues, `${path}.code`, s.code, LIMITS.code, required);
+}
+
+function checkBlock(issues: Issue[], path: string, value: unknown) {
+	if (!value || typeof value !== 'object') {
+		issues.push({ path, message: 'Missing.' });
+		return;
+	}
+	const b = value as Record<string, unknown>;
+	switch (b.type) {
+		case 'heading':
+			checkText(issues, `${path}.text`, b.text, LIMITS.title);
+			break;
+		case 'prose':
+			checkProse(issues, `${path}.text`, b.text, LIMITS.text);
+			break;
+		case 'code':
+			if (!['gdscript', 'csharp', 'txt'].includes(b.lang as string)) {
+				issues.push({ path: `${path}.lang`, message: 'Pick a language.' });
+			}
+			checkText(issues, `${path}.filename`, b.filename, 80, false);
+			checkText(issues, `${path}.code`, b.code, LIMITS.code);
+			checkLineSpec(issues, `${path}.wrong`, b.wrong);
+			checkLineSpec(issues, `${path}.right`, b.right);
+			break;
+		case 'tabs':
+			checkSnippet(issues, `${path}.gdscript`, b.gdscript, true);
+			checkSnippet(issues, `${path}.csharp`, b.csharp, false);
+			break;
+		case 'tree':
+			checkTree(issues, `${path}.text`, b.text);
+			break;
+		case 'callout':
+			if (!['note', 'tip', 'caution'].includes(b.kind as string)) {
+				issues.push({ path: `${path}.kind`, message: 'Pick a callout type.' });
+			}
+			checkText(issues, `${path}.title`, b.title, LIMITS.title);
+			checkProse(issues, `${path}.text`, b.text, LIMITS.text);
+			break;
+		case 'error':
+			checkText(issues, `${path}.source`, b.source, 80, false);
+			checkText(issues, `${path}.message`, b.message, LIMITS.text);
+			break;
+		case 'steps': {
+			if (!Array.isArray(b.items) || !b.items.length) {
+				issues.push({ path: `${path}.items`, message: 'Add at least one step.' });
+				break;
+			}
+			if (b.items.length > LIMITS.steps) {
+				issues.push({ path: `${path}.items`, message: `Too many steps (max ${LIMITS.steps}).` });
+				break;
+			}
+			b.items.forEach((item, i) => checkProse(issues, `${path}.items.${i}`, item, LIMITS.text));
+			break;
+		}
+		default:
+			issues.push({ path: `${path}.type`, message: 'Unknown block type.' });
+	}
+}
+
+export function validatePage(value: unknown): Issue[] {
+	const issues: Issue[] = [];
+	if (!value || typeof value !== 'object') return [{ path: 'page', message: 'Missing page.' }];
+	const p = value as Record<string, unknown>;
+
+	if (p.kind !== 'how-to' && p.kind !== 'error') issues.push({ path: 'kind', message: 'Pick a page type.' });
+	if (!isCategory(p.category)) issues.push({ path: 'category', message: 'Pick a category.' });
+	checkText(issues, 'title', p.title, LIMITS.title);
+	checkText(issues, 'description', p.description, LIMITS.description);
+	checkText(issues, 'label', p.label, LIMITS.label);
+	checkProse(issues, 'shortAnswer', p.shortAnswer, LIMITS.shortAnswer);
+
+	if (typeof p.slug !== 'string' || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(p.slug)) {
+		issues.push({ path: 'slug', message: 'Use lowercase words joined by dashes, like "connect-signal-in-code".' });
+	}
+
+	if (!Array.isArray(p.blocks)) {
+		issues.push({ path: 'blocks', message: 'Missing.' });
+	} else if (p.blocks.length > LIMITS.blocks) {
+		issues.push({ path: 'blocks', message: `Too many blocks (max ${LIMITS.blocks}).` });
+	} else {
+		p.blocks.forEach((b, i) => checkBlock(issues, `blocks.${i}`, b));
+	}
+
+	if (!Array.isArray(p.related)) {
+		issues.push({ path: 'related', message: 'Missing.' });
+	} else if (p.related.length > LIMITS.related) {
+		issues.push({ path: 'related', message: `Too many links (max ${LIMITS.related}).` });
+	} else {
+		p.related.forEach((r, i) => {
+			const path = `related.${i}`;
+			if (!r || typeof r !== 'object') {
+				issues.push({ path, message: 'Missing.' });
+				return;
+			}
+			const link = r as Record<string, unknown>;
+			checkText(issues, `${path}.title`, link.title, LIMITS.title);
+			checkText(issues, `${path}.description`, link.description, LIMITS.description);
+			if (typeof link.href !== 'string' || !/^(\/[^\s]*|https:\/\/[^\s]+)$/.test(link.href)) {
+				issues.push({ path: `${path}.href`, message: 'Use a site path like "/signals/connect-signal-in-code/" or an https:// link.' });
+			}
+		});
+	}
+
+	return issues;
+}
+
+export function validateSubmission(value: unknown): Issue[] {
+	if (!value || typeof value !== 'object') return [{ path: 'submission', message: 'Missing.' }];
+	const s = value as Record<string, unknown>;
+	const issues = validatePage(s.page).map((i) => ({ ...i, path: `page.${i.path}` }));
+	checkText(issues, 'contributor', s.contributor ?? '', 80, false);
+	checkText(issues, 'notes', s.notes ?? '', LIMITS.text, false);
+	return issues;
+}

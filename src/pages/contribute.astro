@@ -1,0 +1,1174 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { CATEGORIES } from '../lib/contribute/schema.ts';
+
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+---
+
+<StarlightPage
+	frontmatter={{
+		title: 'Write a page',
+		description: 'Propose a new Queue Free page without touching code. It goes to review before it is published.',
+		tableOfContents: false,
+		pagefind: false,
+		lastUpdated: false,
+	}}
+>
+	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(CATEGORIES)}>
+		<p class="intro">
+			Fill in the form, check the preview, and send it. Your page becomes a pull request that is reviewed before it goes
+			live. No account needed.
+		</p>
+
+		<div class="modes" role="tablist">
+			<button type="button" data-action="set-mode" data-mode="write" aria-selected="true">Write</button>
+			<button type="button" data-action="set-mode" data-mode="preview" aria-selected="false">Preview</button>
+			<button type="button" data-action="set-mode" data-mode="source" aria-selected="false">Source</button>
+		</div>
+
+		<section class="panel" data-panel="write">
+			<div id="qf-form"></div>
+			{
+				siteKey ? (
+					<div class="turnstile" id="qf-turnstile" />
+				) : (
+					<p class="notice">Submitting is off: this build has no Turnstile site key.</p>
+				)
+			}
+			<div class="submit-row">
+				<button type="button" class="primary" data-action="submit" id="qf-submit" disabled={!siteKey}>
+					Send for review
+				</button>
+				<button type="button" data-action="reset">Start over</button>
+			</div>
+			<div class="summary" id="qf-summary" hidden></div>
+		</section>
+
+		<section class="panel" data-panel="preview" hidden>
+			<div class="preview sl-markdown-content" id="qf-preview"></div>
+		</section>
+
+		<section class="panel" data-panel="source" hidden>
+			<p class="hint">This is the file the form will add to the site. You never need to edit it.</p>
+			<div class="source-row"><button type="button" data-action="copy-source">Copy</button></div>
+			<pre id="qf-source"></pre>
+		</section>
+
+		<section class="panel done" data-panel="done" hidden>
+			<h2>Sent for review</h2>
+			<p>Thanks. Your page is now a pull request. You can follow the review there:</p>
+			<p><a id="qf-pr-link" href="#" target="_blank" rel="noopener">View the pull request</a></p>
+			<button type="button" data-action="reset">Write another page</button>
+		</section>
+	</div>
+</StarlightPage>
+
+{siteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer />}
+
+<script>
+	import { generateMdx, pagePath } from '../lib/contribute/mdx.ts';
+	import {
+		LIMITS,
+		slugify,
+		validateSubmission,
+		type Block,
+		type BlockType,
+		type Category,
+		type Issue,
+		type Page,
+		type PageKind,
+	} from '../lib/contribute/schema.ts';
+
+	type Mode = 'write' | 'preview' | 'source' | 'done';
+
+	interface Draft {
+		page: Page;
+		contributor: string;
+		notes: string;
+		slugTouched: boolean;
+		labelTouched: boolean;
+	}
+
+	declare global {
+		interface Window {
+			turnstile?: {
+				render(el: HTMLElement, options: Record<string, unknown>): string;
+				reset(id?: string): void;
+				getResponse(id?: string): string | undefined;
+			};
+		}
+	}
+
+	const DRAFT_KEY = 'qf-contribute-draft';
+
+	const BLOCK_NAMES: Record<BlockType, string> = {
+		heading: 'Section heading',
+		prose: 'Text',
+		code: 'Code',
+		tabs: 'GDScript and C# tabs',
+		tree: 'Scene tree',
+		callout: 'Callout',
+		error: 'Error message',
+		steps: 'Steps',
+	};
+
+	const BLOCK_HELP: Partial<Record<BlockType, string>> = {
+		prose: 'Plain text. Wrap code in `backticks` and use **double stars** for bold. A blank line starts a new paragraph.',
+		tree: 'One node per line, written as Name: Type. Indent children with two spaces. Add [script] after a node that has a script, and a note in "quotes".',
+		code: 'Line numbers like 2 or 1-3 mark lines as wrong or right.',
+		steps: 'Numbered steps for things to do in the editor.',
+	};
+
+	const esc = (s: string) =>
+		s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+	function newBlock(type: BlockType): Block {
+		switch (type) {
+			case 'heading':
+				return { type, text: '' };
+			case 'prose':
+				return { type, text: '' };
+			case 'code':
+				return { type, lang: 'gdscript', filename: 'main.gd', code: '', wrong: '', right: '' };
+			case 'tabs':
+				return { type, gdscript: { filename: 'main.gd', code: '' }, csharp: { filename: 'Main.cs', code: '' } };
+			case 'tree':
+				return { type, text: 'Main: Node2D [script]\n  Child: Sprite2D' };
+			case 'callout':
+				return { type, kind: 'note', title: '', text: '' };
+			case 'error':
+				return { type, source: '_ready()', message: '' };
+			case 'steps':
+				return { type, items: [''] };
+		}
+	}
+
+	function templateBlocks(kind: PageKind): Block[] {
+		if (kind === 'error') {
+			return [
+				{ type: 'heading', text: 'The error' },
+				{ type: 'prose', text: "You'll see something like this in the **Debugger** panel. The names will be your own:" },
+				{ type: 'error', source: '_ready()', message: '' },
+				{ type: 'heading', text: 'The example scene' },
+				newBlock('tree'),
+				{ type: 'heading', text: 'The cause' },
+				{ type: 'prose', text: '' },
+				{ type: 'code', lang: 'gdscript', filename: 'main.gd', code: '', wrong: '1', right: '2' },
+				{ type: 'heading', text: 'Still stuck?' },
+				{ type: 'prose', text: '' },
+			];
+		}
+		return [
+			{ type: 'heading', text: 'Set up the scene' },
+			newBlock('tree'),
+			{ type: 'steps', items: [''] },
+			{ type: 'heading', text: 'Add the script' },
+			newBlock('tabs'),
+			{ type: 'prose', text: '' },
+			{ type: 'heading', text: 'Common mistakes' },
+			{ type: 'callout', kind: 'note', title: '', text: '' },
+		];
+	}
+
+	function newDraft(kind: PageKind = 'how-to'): Draft {
+		return {
+			page: {
+				kind,
+				category: kind === 'error' ? 'errors' : 'signals',
+				title: '',
+				description: '',
+				label: '',
+				slug: '',
+				shortAnswer: '',
+				blocks: templateBlocks(kind),
+				related: [],
+			},
+			contributor: '',
+			notes: '',
+			slugTouched: false,
+			labelTouched: false,
+		};
+	}
+
+	function loadDraft(): Draft {
+		try {
+			const raw = localStorage.getItem(DRAFT_KEY);
+			if (raw) {
+				const d = JSON.parse(raw) as Draft;
+				if (d?.page?.blocks) return d;
+			}
+		} catch {}
+		return newDraft();
+	}
+
+	function getPath(obj: unknown, path: string): unknown {
+		return path.split('.').reduce<any>((o, k) => (o == null ? undefined : o[k]), obj);
+	}
+
+	function setPath(obj: unknown, path: string, value: unknown) {
+		const keys = path.split('.');
+		const last = keys.pop()!;
+		const target = keys.reduce<any>((o, k) => o[k], obj);
+		target[last] = value;
+	}
+
+	// Form rendering
+
+	const field = (label: string, path: string, control: string, hint = '') =>
+		`<label class="field"><span class="label">${esc(label)}</span>${control}${hint ? `<span class="hint">${hint}</span>` : ''}<span class="error" data-error-for="${path}"></span></label>`;
+
+	const input = (path: string, value: string, attrs = '') =>
+		`<input type="text" data-path="${path}" value="${esc(value)}" ${attrs}>`;
+
+	const textarea = (path: string, value: string, rows: number, attrs = '') =>
+		`<textarea data-path="${path}" rows="${rows}" ${attrs}>${esc(value)}</textarea>`;
+
+	const select = (path: string, value: string, options: [string, string][]) =>
+		`<select data-path="${path}">${options
+			.map(([v, label]) => `<option value="${v}"${v === value ? ' selected' : ''}>${esc(label)}</option>`)
+			.join('')}</select>`;
+
+	function codeFields(path: string, snippet: { filename: string; code: string }, lang: string) {
+		return (
+			field('File name', `${path}.filename`, input(`${path}.filename`, snippet.filename, 'placeholder="main.gd"')) +
+			field(lang, `${path}.code`, textarea(`${path}.code`, snippet.code, 8, 'class="code" spellcheck="false"'))
+		);
+	}
+
+	function renderBlock(block: Block, i: number, count: number): string {
+		const p = `page.blocks.${i}`;
+		let body = '';
+		switch (block.type) {
+			case 'heading':
+				body = field('Heading', `${p}.text`, input(`${p}.text`, block.text));
+				break;
+			case 'prose':
+				body = field('Text', `${p}.text`, textarea(`${p}.text`, block.text, 4));
+				break;
+			case 'code':
+				body =
+					`<div class="row">` +
+					field('Language', `${p}.lang`, select(`${p}.lang`, block.lang, [['gdscript', 'GDScript'], ['csharp', 'C#'], ['txt', 'Plain text']])) +
+					field('File name', `${p}.filename`, input(`${p}.filename`, block.filename)) +
+					`</div>` +
+					field('Code', `${p}.code`, textarea(`${p}.code`, block.code, 8, 'class="code" spellcheck="false"')) +
+					`<div class="row">` +
+					field('Mark as wrong (lines)', `${p}.wrong`, input(`${p}.wrong`, block.wrong, 'placeholder="1"')) +
+					field('Mark as right (lines)', `${p}.right`, input(`${p}.right`, block.right, 'placeholder="2"')) +
+					`</div>`;
+				break;
+			case 'tabs':
+				body =
+					`<div class="sub">${codeFields(`${p}.gdscript`, block.gdscript, 'GDScript')}</div>` +
+					`<div class="sub">${codeFields(`${p}.csharp`, block.csharp, 'C# (optional)')}</div>`;
+				break;
+			case 'tree':
+				body = field('Nodes', `${p}.text`, textarea(`${p}.text`, block.text, 5, 'class="code" spellcheck="false"'));
+				break;
+			case 'callout':
+				body =
+					`<div class="row">` +
+					field('Type', `${p}.kind`, select(`${p}.kind`, block.kind, [['note', 'Note'], ['tip', 'Tip'], ['caution', 'Caution']])) +
+					field('Title', `${p}.title`, input(`${p}.title`, block.title)) +
+					`</div>` +
+					field('Text', `${p}.text`, textarea(`${p}.text`, block.text, 3));
+				break;
+			case 'error':
+				body =
+					field('Where it happens', `${p}.source`, input(`${p}.source`, block.source, 'placeholder="_ready()"')) +
+					field('Error text', `${p}.message`, textarea(`${p}.message`, block.message, 2, 'class="code" spellcheck="false"'));
+				break;
+			case 'steps':
+				body =
+					`<ol class="steps">` +
+					block.items
+						.map(
+							(item, j) =>
+								`<li>${field(`Step ${j + 1}`, `${p}.items.${j}`, textarea(`${p}.items.${j}`, item, 2))}` +
+								`<button type="button" class="small" data-action="remove-step" data-index="${i}" data-item="${j}">Remove step</button></li>`,
+						)
+						.join('') +
+					`</ol><button type="button" class="small" data-action="add-step" data-index="${i}">Add a step</button>` +
+					`<span class="error" data-error-for="${p}.items"></span>`;
+				break;
+		}
+		const help = BLOCK_HELP[block.type];
+		return `<div class="block" data-block="${i}">
+			<div class="block-head">
+				<span class="block-name">${BLOCK_NAMES[block.type]}</span>
+				<span class="block-tools">
+					<button type="button" class="small" data-action="move-block" data-index="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+					<button type="button" class="small" data-action="move-block" data-index="${i}" data-dir="1" ${i === count - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+					<button type="button" class="small" data-action="remove-block" data-index="${i}">Remove</button>
+				</span>
+			</div>
+			${help ? `<p class="hint">${help}</p>` : ''}
+			${body}
+		</div>`;
+	}
+
+	function renderForm(draft: Draft, categories: Record<string, string>): string {
+		const { page } = draft;
+		const kinds: [PageKind, string, string][] = [
+			['how-to', 'How do I...?', 'A task, with the scene and the script that does it.'],
+			['error', 'Why does this error...?', 'An error message, what causes it, and the fix.'],
+		];
+		return `
+		<fieldset class="kinds">
+			<legend>What kind of page is it?</legend>
+			${kinds
+				.map(
+					([k, label, hint]) => `<label class="kind${page.kind === k ? ' selected' : ''}">
+					<input type="radio" name="kind" value="${k}" data-action="set-kind" ${page.kind === k ? 'checked' : ''}>
+					<span class="label">${label}</span><span class="hint">${hint}</span></label>`,
+				)
+				.join('')}
+		</fieldset>
+
+		${field('Title', 'page.title', input('page.title', page.title, `placeholder="${page.kind === 'error' ? 'Why does it say ...?' : 'How do I ...?'}" maxlength="${LIMITS.title}"`), 'Write it as the question people search for.')}
+		${field('Description', 'page.description', textarea('page.description', page.description, 2, `maxlength="${LIMITS.description}"`), 'One sentence shown in search results.')}
+		<div class="row">
+			${field('Category', 'page.category', select('page.category', page.category, Object.entries(categories)))}
+			${field('Sidebar name', 'page.label', input('page.label', page.label, `maxlength="${LIMITS.label}"`), 'Short, for the menu.')}
+		</div>
+		${field('Address', 'page.slug', `<span class="slug"><span class="prefix">queuefree.dev/${esc(page.category)}/</span>${input('page.slug', page.slug)}</span>`)}
+		${field('Short answer', 'page.shortAnswer', textarea('page.shortAnswer', page.shortAnswer, 3, `maxlength="${LIMITS.shortAnswer}"`), 'One or two sentences. This is what most readers come for.')}
+
+		<h2>Content</h2>
+		<div class="blocks">${page.blocks.map((b, i) => renderBlock(b, i, page.blocks.length)).join('')}</div>
+		<span class="error" data-error-for="page.blocks"></span>
+		<div class="add-block">
+			<span class="label">Add</span>
+			${(Object.keys(BLOCK_NAMES) as BlockType[]).map((t) => `<button type="button" class="small" data-action="add-block" data-type="${t}">${BLOCK_NAMES[t]}</button>`).join('')}
+		</div>
+
+		<h2>Related pages</h2>
+		<div class="links">
+			${page.related
+				.map(
+					(r, i) => `<div class="block">
+					<div class="block-head"><span class="block-name">Link ${i + 1}</span><span class="block-tools"><button type="button" class="small" data-action="remove-link" data-index="${i}">Remove</button></span></div>
+					${field('Title', `page.related.${i}.title`, input(`page.related.${i}.title`, r.title))}
+					${field('What it covers', `page.related.${i}.description`, input(`page.related.${i}.description`, r.description))}
+					${field('Link', `page.related.${i}.href`, input(`page.related.${i}.href`, r.href, 'placeholder="/signals/connect-signal-in-code/"'))}
+				</div>`,
+				)
+				.join('')}
+		</div>
+		<span class="error" data-error-for="page.related"></span>
+		<button type="button" class="small" data-action="add-link">Add a link</button>
+
+		<h2>About you</h2>
+		${field('Name or handle (optional)', 'contributor', input('contributor', draft.contributor), 'Shown on the pull request, not on the page.')}
+		${field('Notes for the reviewer (optional)', 'notes', textarea('notes', draft.notes, 2))}
+		`;
+	}
+
+	// Preview rendering
+
+	function inlineMd(text: string): string {
+		return esc(text)
+			.replace(/`([^`]+)`/g, '<code>$1</code>')
+			.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+			.replace(/(^|\s)\*([^*\s][^*]*)\*/g, '$1<em>$2</em>');
+	}
+
+	function paragraphs(text: string): string {
+		return text
+			.trim()
+			.split(/\n\s*\n/)
+			.filter(Boolean)
+			.map((p) => `<p>${inlineMd(p).replace(/\n/g, '<br>')}</p>`)
+			.join('');
+	}
+
+	function lineSet(spec: string): Set<number> {
+		const set = new Set<number>();
+		for (const part of spec.split(',')) {
+			const m = part.trim().match(/^(\d+)(?:-(\d+))?$/);
+			if (!m) continue;
+			const from = Number(m[1]);
+			const to = m[2] ? Number(m[2]) : from;
+			for (let n = from; n <= to; n++) set.add(n);
+		}
+		return set;
+	}
+
+	function codePreview(code: string, filename: string, wrong = '', right = ''): string {
+		const del = lineSet(wrong);
+		const ins = lineSet(right);
+		const lines = code.replace(/\s+$/, '').split('\n');
+		const rows = lines
+			.map((line, i) => {
+				const n = i + 1;
+				const cls = del.has(n) ? ' del' : ins.has(n) ? ' ins' : '';
+				return `<span class="ln${cls}"><span class="n">${n}</span><span class="t">${esc(line) || ' '}</span></span>`;
+			})
+			.join('');
+		return `<figure class="qf-pre">${filename.trim() ? `<figcaption>${esc(filename)}</figcaption>` : ''}<pre><code>${rows}</code></pre></figure>`;
+	}
+
+	function treePreview(text: string): string {
+		const lines = text.split('\n').filter((l) => l.trim());
+		if (!lines.length) return '';
+		const base = Math.min(...lines.map((l) => l.match(/^\s*/)![0].length));
+		let html = '';
+		let depth = -1;
+		for (const line of lines) {
+			const m = line.match(/^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/);
+			if (!m) return `<p class="qf-bad">Can't read the line "${esc(line.trim())}".</p>`;
+			const d = Math.floor((m[1].length - base) / 2);
+			const type = m[3] ?? 'Node';
+			if (d > depth) html += '<ul>'.repeat(d - depth);
+			else {
+				html += '</li>' + '</ul></li>'.repeat(depth - d);
+			}
+			html += `<li><span class="row"><img src="/godot-editor-icons/${esc(type)}.svg" alt="" width="16" height="16" onerror="this.style.visibility='hidden'"><span class="name">${esc(m[2])}</span><span class="type">${esc(type)}</span>${m[4].includes('[script]') ? '<img src="/godot-editor-icons/Script.svg" alt="has script" width="16" height="16">' : ''}${m[5] ? `<span class="note">${esc(m[5])}</span>` : ''}</span>`;
+			depth = d;
+		}
+		html += '</li>' + '</ul></li>'.repeat(depth) + '</ul>';
+		return `<div class="qf-tree">${html}</div>`;
+	}
+
+	function aside(kind: string, title: string, inner: string): string {
+		return `<aside class="starlight-aside starlight-aside--${kind}"><p class="starlight-aside__title">${esc(title)}</p><div class="starlight-aside__content">${inner}</div></aside>`;
+	}
+
+	function previewBlock(block: Block): string {
+		switch (block.type) {
+			case 'heading':
+				return `<h2>${esc(block.text)}</h2>`;
+			case 'prose':
+				return paragraphs(block.text);
+			case 'code':
+				return codePreview(block.code, block.filename, block.wrong, block.right);
+			case 'tabs':
+				return (
+					`<div class="qf-tabs"><div class="tab-bar"><span class="on">GDScript</span>${block.csharp.code.trim() ? '<span>C#</span>' : ''}</div>` +
+					codePreview(block.gdscript.code, block.gdscript.filename) +
+					(block.csharp.code.trim() ? `<div class="tab-bar"><span>GDScript</span><span class="on">C#</span></div>` + codePreview(block.csharp.code, block.csharp.filename) : '') +
+					`</div>`
+				);
+			case 'tree':
+				return treePreview(block.text);
+			case 'callout':
+				return aside(block.kind, block.title || block.kind, paragraphs(block.text));
+			case 'error':
+				return `<div class="qf-godot-error"><span class="dot"></span><span>${esc(block.source.trim() ? `${block.source.trim()}: ${block.message}` : block.message)}</span></div>`;
+			case 'steps':
+				return `<ol class="qf-steps">${block.items.map((s) => `<li>${paragraphs(s)}</li>`).join('')}</ol>`;
+		}
+	}
+
+	function renderPreview(page: Page): string {
+		const parts = [
+			`<h1>${esc(page.title) || '<span class="qf-empty">Untitled page</span>'}</h1>`,
+			`<p class="qf-meta"><span class="pill">Godot 4.x</span></p>`,
+			aside('tip', 'Short answer', paragraphs(page.shortAnswer)),
+			...page.blocks.map(previewBlock),
+		];
+		if (page.related.length) {
+			parts.push(
+				`<h2>Related</h2><div class="qf-cards">${page.related
+					.map((r) => `<a class="card" href="${esc(r.href)}"><span class="title">${esc(r.title)}</span><span class="desc">${esc(r.description)}</span></a>`)
+					.join('')}</div>`,
+			);
+		}
+		return parts.join('');
+	}
+
+	// Controller
+
+	function init(root: HTMLElement) {
+		if (root.dataset.ready) return;
+		root.dataset.ready = '1';
+
+		const categories = JSON.parse(root.dataset.categories ?? '{}') as Record<Category, string>;
+		const formEl = root.querySelector<HTMLElement>('#qf-form')!;
+		const previewEl = root.querySelector<HTMLElement>('#qf-preview')!;
+		const sourceEl = root.querySelector<HTMLElement>('#qf-source')!;
+		const summaryEl = root.querySelector<HTMLElement>('#qf-summary')!;
+		const submitBtn = root.querySelector<HTMLButtonElement>('#qf-submit')!;
+		const siteKey = root.dataset.siteKey ?? '';
+
+		let draft = loadDraft();
+		let previewTimer = 0;
+		let turnstileId: string | undefined;
+
+		const save = () => {
+			try {
+				localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+			} catch {}
+		};
+
+		const refreshOutputs = () => {
+			previewEl.innerHTML = renderPreview(draft.page);
+			sourceEl.textContent = generateMdx(draft.page);
+		};
+
+		const scheduleOutputs = () => {
+			clearTimeout(previewTimer);
+			previewTimer = window.setTimeout(refreshOutputs, 150);
+		};
+
+		const renderAll = () => {
+			formEl.innerHTML = renderForm(draft, categories);
+			refreshOutputs();
+		};
+
+		const setMode = (mode: Mode) => {
+			for (const panel of root.querySelectorAll<HTMLElement>('[data-panel]')) panel.hidden = panel.dataset.panel !== mode;
+			for (const b of root.querySelectorAll<HTMLElement>('[data-mode]')) b.setAttribute('aria-selected', String(b.dataset.mode === mode));
+			if (mode !== 'write') refreshOutputs();
+		};
+
+		const clearIssues = () => {
+			for (const el of root.querySelectorAll<HTMLElement>('[data-error-for]')) el.textContent = '';
+			summaryEl.hidden = true;
+			summaryEl.innerHTML = '';
+		};
+
+		const showIssues = (issues: Issue[], headline: string) => {
+			clearIssues();
+			const unplaced: Issue[] = [];
+			for (const issue of issues) {
+				const el = formEl.querySelector<HTMLElement>(`[data-error-for="${issue.path}"]`);
+				if (el) el.textContent = issue.message;
+				else unplaced.push(issue);
+			}
+			summaryEl.hidden = false;
+			summaryEl.innerHTML =
+				`<p>${esc(headline)}</p>` + (unplaced.length ? `<ul>${unplaced.map((i) => `<li>${esc(i.message)}</li>`).join('')}</ul>` : '');
+			setMode('write');
+			const first = formEl.querySelector<HTMLElement>('[data-error-for]:not(:empty)');
+			(first ?? summaryEl).scrollIntoView({ behavior: 'smooth', block: 'center' });
+		};
+
+		const mountTurnstile = () => {
+			const el = root.querySelector<HTMLElement>('#qf-turnstile');
+			if (!el || !siteKey || turnstileId) return;
+			if (!window.turnstile) {
+				window.setTimeout(mountTurnstile, 200);
+				return;
+			}
+			turnstileId = window.turnstile.render(el, { sitekey: siteKey, theme: 'auto' });
+		};
+
+		const submit = async () => {
+			clearIssues();
+			const submission = {
+				page: draft.page,
+				contributor: draft.contributor,
+				notes: draft.notes,
+				turnstileToken: window.turnstile?.getResponse(turnstileId) ?? '',
+			};
+			const local = validateSubmission(submission);
+			if (local.length) {
+				showIssues(local, 'A few fields need attention before sending.');
+				return;
+			}
+			if (!submission.turnstileToken) {
+				showIssues([], 'Complete the human check above the send button first.');
+				return;
+			}
+			submitBtn.disabled = true;
+			submitBtn.textContent = 'Sending...';
+			try {
+				const res = await fetch('/api/propose', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify(submission),
+				});
+				const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string; issues?: Issue[] };
+				if (res.status === 201 && data.url) {
+					root.querySelector<HTMLAnchorElement>('#qf-pr-link')!.href = data.url;
+					localStorage.removeItem(DRAFT_KEY);
+					setMode('done');
+					return;
+				}
+				showIssues(data.issues ?? [], data.error ?? 'Something went wrong. Try again in a moment.');
+				window.turnstile?.reset(turnstileId);
+			} catch {
+				showIssues([], 'Could not reach the server. Check your connection and try again.');
+			} finally {
+				submitBtn.disabled = false;
+				submitBtn.textContent = 'Send for review';
+			}
+		};
+
+		root.addEventListener('input', (e) => {
+			const el = e.target as HTMLInputElement | HTMLTextAreaElement;
+			const path = el.dataset.path;
+			if (!path) return;
+			setPath(draft, path, el.value);
+			if (path === 'page.title') {
+				if (!draft.slugTouched) {
+					draft.page.slug = slugify(el.value);
+					formEl.querySelector<HTMLInputElement>('[data-path="page.slug"]')!.value = draft.page.slug;
+				}
+			} else if (path === 'page.slug') draft.slugTouched = true;
+			else if (path === 'page.label') draft.labelTouched = true;
+			if (path === 'page.category') {
+				formEl.querySelector<HTMLElement>('.slug .prefix')!.textContent = `queuefree.dev/${el.value}/`;
+			}
+			save();
+			scheduleOutputs();
+		});
+
+		root.addEventListener('click', (e) => {
+			const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
+			if (!btn) return;
+			const { action, index, type, dir, item, mode, value } = btn.dataset;
+			const i = Number(index);
+			const blocks = draft.page.blocks;
+			switch (action) {
+				case 'set-mode':
+					setMode(mode as Mode);
+					return;
+				case 'set-kind': {
+					const kind = ((btn as HTMLInputElement).value || value) as PageKind;
+					if (kind === draft.page.kind) return;
+					const edited = blocks.some((b) => JSON.stringify(b) !== JSON.stringify(templateBlocks(draft.page.kind).find((t) => t.type === b.type)));
+					if (edited && !confirm('Switching the page type replaces the content blocks with the template for that type. Continue?')) {
+						renderAll();
+						return;
+					}
+					draft.page.kind = kind;
+					draft.page.blocks = templateBlocks(kind);
+					if (kind === 'error') draft.page.category = 'errors';
+					break;
+				}
+				case 'add-block':
+					blocks.push(newBlock(type as BlockType));
+					break;
+				case 'remove-block':
+					blocks.splice(i, 1);
+					break;
+				case 'move-block': {
+					const j = i + Number(dir);
+					if (j < 0 || j >= blocks.length) return;
+					[blocks[i], blocks[j]] = [blocks[j]!, blocks[i]!];
+					break;
+				}
+				case 'add-step':
+					(blocks[i] as { items: string[] }).items.push('');
+					break;
+				case 'remove-step':
+					(blocks[i] as { items: string[] }).items.splice(Number(item), 1);
+					break;
+				case 'add-link':
+					draft.page.related.push({ title: '', description: '', href: '' });
+					break;
+				case 'remove-link':
+					draft.page.related.splice(i, 1);
+					break;
+				case 'copy-source':
+					navigator.clipboard?.writeText(sourceEl.textContent ?? '');
+					return;
+				case 'reset':
+					if (root.querySelector<HTMLElement>('[data-panel="done"]')!.hidden && !confirm('Clear everything and start over?')) return;
+					draft = newDraft();
+					localStorage.removeItem(DRAFT_KEY);
+					renderAll();
+					setMode('write');
+					return;
+				case 'submit':
+					submit();
+					return;
+				default:
+					return;
+			}
+			save();
+			renderAll();
+			if (action === 'add-block') {
+				const added = formEl.querySelector<HTMLElement>(`[data-block="${blocks.length - 1}"]`);
+				added?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				added?.querySelector<HTMLElement>('input, textarea')?.focus();
+			}
+		});
+
+		renderAll();
+		mountTurnstile();
+	}
+
+	const boot = () => {
+		const root = document.getElementById('qf-contribute');
+		if (root) init(root);
+	};
+	boot();
+	document.addEventListener('astro:page-load', boot);
+</script>
+
+<style is:global>
+	.qf-contribute {
+		--qf-field-bg: var(--qf-surface);
+		--qf-danger: #ff6b6b;
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		font-size: var(--sl-text-base);
+	}
+	.qf-contribute .intro {
+		color: var(--qf-text);
+	}
+	.qf-contribute .hint {
+		display: block;
+		color: var(--qf-muted);
+		font-size: var(--sl-text-sm);
+		line-height: 1.4;
+	}
+	.qf-contribute .notice {
+		padding: 0.75rem 1rem;
+		border-radius: 0.5rem;
+		background: var(--qf-surface);
+		color: var(--qf-muted);
+	}
+	.qf-contribute h2 {
+		font-size: var(--sl-text-h3);
+		font-weight: 700;
+		margin-top: 1.5rem;
+	}
+
+	/* Mode switch */
+	.qf-contribute .modes {
+		display: flex;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		border-radius: 999px;
+		background: var(--qf-surface);
+		width: fit-content;
+	}
+	.qf-contribute .modes button {
+		border: 0;
+		background: none;
+		color: var(--qf-muted);
+		padding: 0.4rem 1rem;
+		border-radius: 999px;
+		cursor: pointer;
+		font: inherit;
+	}
+	.qf-contribute .modes button[aria-selected='true'] {
+		background: var(--qf-bg);
+		color: var(--qf-text);
+	}
+
+	/* Form */
+	.qf-contribute [hidden] {
+		display: none !important;
+	}
+	.qf-contribute .panel {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+	.qf-contribute #qf-form {
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+	.qf-contribute .field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		flex: 1;
+		min-width: 0;
+	}
+	.qf-contribute .label {
+		font-weight: 600;
+		color: var(--qf-text);
+	}
+	.qf-contribute input[type='text'],
+	.qf-contribute textarea,
+	.qf-contribute select {
+		width: 100%;
+		padding: 0.6rem 0.75rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+		background: var(--qf-field-bg);
+		color: var(--qf-text);
+		font: inherit;
+		line-height: 1.4;
+	}
+	.qf-contribute textarea {
+		resize: vertical;
+	}
+	.qf-contribute textarea.code,
+	.qf-contribute #qf-source {
+		font-family: var(--sl-font-mono);
+		font-size: 0.875rem;
+		tab-size: 4;
+		white-space: pre;
+		overflow-x: auto;
+	}
+	.qf-contribute input:focus-visible,
+	.qf-contribute textarea:focus-visible,
+	.qf-contribute select:focus-visible {
+		outline: 2px solid var(--qf-accent);
+		outline-offset: 1px;
+	}
+	.qf-contribute .row {
+		display: flex;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+	.qf-contribute .row > .field {
+		flex: 1 1 12rem;
+	}
+	.qf-contribute .slug {
+		display: flex;
+		align-items: center;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+		background: var(--qf-field-bg);
+		overflow: hidden;
+	}
+	.qf-contribute .slug .prefix {
+		padding: 0 0 0 0.75rem;
+		color: var(--qf-muted);
+		white-space: nowrap;
+		font-size: var(--sl-text-sm);
+	}
+	.qf-contribute .slug input {
+		border: 0;
+		background: none;
+		padding-left: 0.1rem;
+	}
+	.qf-contribute .error:not(:empty) {
+		color: var(--qf-danger);
+		font-size: var(--sl-text-sm);
+	}
+	.qf-contribute .summary {
+		padding: 1rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--qf-danger);
+		color: var(--qf-text);
+	}
+	.qf-contribute .summary ul {
+		margin: 0.5rem 0 0 1.25rem;
+	}
+
+	.qf-contribute .kinds {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+		gap: 0.75rem;
+		border: 0;
+		padding: 0;
+		margin: 0;
+	}
+	.qf-contribute .kinds legend {
+		font-weight: 600;
+		margin-bottom: 0.5rem;
+	}
+	.qf-contribute .kind {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.9rem 1rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+		cursor: pointer;
+	}
+	.qf-contribute .kind.selected {
+		border-color: var(--qf-accent);
+		background: var(--qf-surface);
+	}
+	.qf-contribute .kind input {
+		position: absolute;
+		opacity: 0;
+	}
+
+	.qf-contribute .blocks {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	.qf-contribute .block {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		padding: 1rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+	}
+	.qf-contribute .block .field {
+		gap: 0.25rem;
+	}
+	.qf-contribute .block .label {
+		font-size: var(--sl-text-sm);
+	}
+	.qf-contribute .block-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.qf-contribute .block-name {
+		font-weight: 600;
+	}
+	.qf-contribute .block-tools {
+		display: flex;
+		gap: 0.25rem;
+	}
+	.qf-contribute .sub {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-top: 0.5rem;
+		border-top: 1px dashed var(--qf-line);
+	}
+	.qf-contribute .steps {
+		margin: 0;
+		padding-left: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	.qf-contribute .steps li {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		align-items: flex-start;
+	}
+	.qf-contribute .steps .field {
+		width: 100%;
+	}
+	.qf-contribute .add-block {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.qf-contribute .links {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	/* Buttons */
+	.qf-contribute button {
+		font: inherit;
+		cursor: pointer;
+	}
+	.qf-contribute button.small,
+	.qf-contribute .submit-row button:not(.primary),
+	.qf-contribute .source-row button,
+	.qf-contribute .done button {
+		padding: 0.35rem 0.75rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 999px;
+		background: none;
+		color: var(--qf-text);
+		font-size: var(--sl-text-sm);
+	}
+	.qf-contribute button.small:hover:not(:disabled) {
+		border-color: var(--qf-accent);
+	}
+	.qf-contribute button:disabled {
+		opacity: 0.4;
+		cursor: default;
+	}
+	.qf-contribute .submit-row {
+		display: flex;
+		gap: 0.75rem;
+		align-items: center;
+		flex-wrap: wrap;
+	}
+	.qf-contribute button.primary {
+		padding: 0.7rem 1.5rem;
+		border: 0;
+		border-radius: 999px;
+		background: var(--qf-accent);
+		color: #fff;
+		font-weight: 600;
+	}
+	.qf-contribute .source-row {
+		display: flex;
+		justify-content: flex-end;
+	}
+	.qf-contribute #qf-source {
+		padding: 1rem;
+		border-radius: 0.5rem;
+		background: var(--qf-frame-code);
+		color: var(--qf-code-default);
+		margin: 0;
+	}
+	.qf-contribute .done {
+		padding: 1.5rem;
+		border-radius: 0.5rem;
+		background: var(--qf-surface);
+		align-items: flex-start;
+	}
+	.qf-contribute .done h2 {
+		margin: 0;
+	}
+
+	/* Preview: approximations of the site's components */
+	.qf-contribute .preview {
+		padding: 1.5rem;
+		border: 1px dashed var(--qf-line);
+		border-radius: 0.5rem;
+	}
+	.qf-contribute .preview h1 {
+		font-size: var(--sl-text-h1);
+		line-height: var(--sl-line-height-headings);
+		font-weight: 700;
+	}
+	.qf-contribute .qf-empty {
+		color: var(--qf-muted);
+	}
+	.qf-contribute .qf-meta .pill {
+		font-size: 1rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: 45px;
+		background: var(--qf-tag);
+	}
+	.qf-contribute .qf-pre {
+		margin: 0;
+		border: var(--qf-frame-border-width) solid var(--qf-frame-border);
+		border-radius: 0.5rem;
+		background: var(--qf-frame-code);
+		overflow: hidden;
+	}
+	.qf-contribute .qf-pre figcaption {
+		padding: 0.4rem 1rem;
+		background: var(--qf-frame-error);
+		border-bottom: var(--qf-frame-border-width) solid var(--qf-frame-border);
+		color: var(--qf-code-default);
+		font-family: var(--sl-font-mono);
+		font-size: 0.8rem;
+	}
+	.qf-contribute .qf-pre pre {
+		margin: 0;
+		padding: 1rem 0;
+		background: none;
+		border: 0;
+		overflow-x: auto;
+		font-family: var(--sl-font-mono);
+		font-size: 0.875rem;
+		line-height: 1.5rem;
+		color: var(--qf-code-default);
+		tab-size: 4;
+	}
+	.qf-contribute .qf-pre .ln {
+		display: flex;
+		padding: 0 1rem;
+	}
+	.qf-contribute .qf-pre .n {
+		width: 2rem;
+		flex: none;
+		color: var(--qf-code-dim);
+		user-select: none;
+	}
+	.qf-contribute .qf-pre .t {
+		white-space: pre;
+	}
+	.qf-contribute .qf-pre .del {
+		background: color-mix(in srgb, var(--qf-code-error) 15%, transparent);
+	}
+	.qf-contribute .qf-pre .ins {
+		background: color-mix(in srgb, #7bd88f 15%, transparent);
+	}
+	.qf-contribute .qf-tabs .tab-bar {
+		display: flex;
+		gap: 1rem;
+		padding: 0.25rem 0;
+		font-size: var(--sl-text-sm);
+		color: var(--qf-muted);
+	}
+	.qf-contribute .qf-tabs .tab-bar .on {
+		color: var(--qf-text);
+		border-bottom: 2px solid var(--qf-accent);
+	}
+	.qf-contribute .qf-tabs .tab-bar + .qf-pre {
+		margin-bottom: 1rem;
+	}
+	.qf-contribute .qf-tree {
+		padding: 1rem;
+		border-radius: 0.5rem;
+		background: var(--qf-frame-tree);
+		font-size: var(--sl-text-sm);
+		color: var(--qf-code-default);
+		overflow-x: auto;
+	}
+	.qf-contribute .qf-tree ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.qf-contribute .qf-tree ul ul {
+		margin-left: 8px;
+		padding-left: 14px;
+		border-left: 1px solid var(--qf-frame-line);
+	}
+	.qf-contribute .qf-tree .row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.15rem 0;
+		white-space: nowrap;
+	}
+	.qf-contribute .qf-tree .type {
+		color: var(--qf-frame-muted);
+		font-size: var(--sl-text-xs);
+	}
+	.qf-contribute .qf-tree .note {
+		margin-left: 1rem;
+		padding: 0.125rem 0.75rem;
+		border-radius: 0.375rem;
+		background: var(--qf-frame-note);
+		color: #1a1a1a;
+		font-style: italic;
+	}
+	.qf-contribute .qf-bad {
+		color: var(--qf-danger);
+	}
+	.qf-contribute .qf-godot-error {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 1rem;
+		border: var(--qf-frame-border-width) solid var(--qf-frame-border);
+		border-radius: 0.5rem;
+		background: var(--qf-frame-error);
+		color: var(--qf-code-error);
+		font-family: var(--sl-font-mono);
+		font-size: 0.875rem;
+		line-height: 1.5rem;
+		overflow-wrap: anywhere;
+	}
+	.qf-contribute .qf-godot-error .dot {
+		flex: none;
+		width: 0.5rem;
+		height: 0.5rem;
+		margin-top: 0.5rem;
+		border-radius: 50%;
+		background: var(--qf-code-error);
+	}
+	.qf-contribute .qf-steps {
+		padding-left: 1.5rem;
+	}
+	.qf-contribute .qf-steps li + li {
+		margin-top: 0.75rem;
+	}
+	.qf-contribute .qf-cards {
+		display: grid;
+		gap: 1rem;
+	}
+	.qf-contribute .qf-cards .card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 1rem;
+		border: 1px solid var(--qf-line);
+		border-radius: 0.5rem;
+		text-decoration: none;
+		color: var(--qf-text);
+	}
+	.qf-contribute .qf-cards .title {
+		font-weight: 600;
+	}
+	.qf-contribute .qf-cards .desc {
+		color: var(--qf-muted);
+		font-size: var(--sl-text-sm);
+	}
+</style>

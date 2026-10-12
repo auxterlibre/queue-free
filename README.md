@@ -19,6 +19,21 @@ Open http://localhost:4321.
 2. Save screenshots as `.webp` in `src/assets/<category>/`.
 3. For a new category, add a sidebar entry in `astro.config.mjs`.
 
+## Contribute form
+
+`/contribute/` is a form that turns a filled-in page into a pull request. It needs a Cloudflare Pages Function (`functions/api/propose.ts`) and these settings on the Pages project:
+
+| Where | Name | Value |
+|---|---|---|
+| Build variable | `PUBLIC_TURNSTILE_SITE_KEY` | Site key of a [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) widget for `queuefree.dev` |
+| Secret | `TURNSTILE_SECRET` | Secret key of the same widget |
+| Secret | `GITHUB_TOKEN` | Fine-grained token for this repo with **Contents: read and write** and **Pull requests: read and write** |
+| KV binding (optional) | `RATE_LIMIT` | Any KV namespace, used to cap submissions per IP |
+
+Pull requests are opened by the token's account. Optional variables: `GITHUB_REPO` (`owner/repo`, defaults to this repo) and `GITHUB_BASE` (defaults to `main`).
+
+Without `PUBLIC_TURNSTILE_SITE_KEY` the form builds with sending disabled. For local work copy `.env.example` to `.env`; it holds Turnstile's always-pass test key.
+
 ## Build
 
 ```
