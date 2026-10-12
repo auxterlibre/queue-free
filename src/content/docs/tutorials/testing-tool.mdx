@@ -1,0 +1,81 @@
+---
+title: "Testing the tool"
+description: "This should work just fine."
+godot: 4.x
+sidebar:
+  label: "Testing the tool"
+---
+
+import { Aside, Steps, Tabs, TabItem } from '@astrojs/starlight/components';
+import SceneTree from '../../../components/SceneTree.astro';
+
+<Aside type="tip" title="Short answer">
+Follow the tutorial
+</Aside>
+
+## Example scene
+
+<SceneTree tree={`
+  Main: Node2D [script] "Script goes here"
+    Child: Sprite2D "very long note that might not fit."
+    Area: Area2D
+      ItemList: ItemList
+`} />
+
+<Steps>
+
+1. Remember, remember... the 5th of november
+
+2. Go back to Step 1.
+
+</Steps>
+
+## Big bad wolf
+
+<Tabs syncKey="lang">
+<TabItem label="GDScript">
+
+```gdscript title="main.gd"
+class_name MyClass
+
+var text: String
+
+func start() -> void:
+	var i: int = 0
+```
+
+</TabItem>
+<TabItem label="C#">
+
+```csharp title="Main.cs"
+using Godot;
+
+public partial class MyClass : Node2D
+{
+    private string text;
+
+    public override void start()
+    {
+        var i: int = 0
+    }
+}
+```
+
+</TabItem>
+</Tabs>
+
+This is very *important*.
+
+## Common mistakes
+
+:::tip[Remember]
+We are all gonna die.
+:::
+
+:::note[FYI]
+This is just a test.
+:::
+
+:::caution[Beware]
+Life is hard.
+:::
