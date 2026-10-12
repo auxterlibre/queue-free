@@ -671,10 +671,17 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			refreshOutputs();
 		};
 
+		let currentMode: Mode = 'write';
+		const scrollByMode: Partial<Record<Mode, number>> = {};
+
 		const setMode = (mode: Mode) => {
+			if (mode === currentMode) return;
+			scrollByMode[currentMode] = window.scrollY;
+			currentMode = mode;
 			for (const panel of root.querySelectorAll<HTMLElement>('[data-panel]')) panel.hidden = panel.dataset.panel !== mode;
 			for (const b of root.querySelectorAll<HTMLElement>('[data-mode]')) b.setAttribute('aria-selected', String(b.dataset.mode === mode));
 			if (mode !== 'write') refreshOutputs();
+			window.scrollTo({ top: scrollByMode[mode] ?? 0 });
 		};
 
 		const clearIssues = () => {
