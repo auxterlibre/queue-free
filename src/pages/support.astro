@@ -7,20 +7,21 @@ import { KOFI_NAME, KOFI_URL } from '../site.ts';
 	hasSidebar={false}
 	frontmatter={{
 		title: 'Support Queue Free',
-		description: 'Queue Free is free and has no ads. If it saved you time, you can buy a coffee.',
+		description: 'Queue Free is free and has no ads. If it saved you time, a small donation or a new page helps.',
 		tableOfContents: false,
 		pagefind: false,
 		lastUpdated: false,
 	}}
 >
 	<div class="qf-support not-content">
+		<p>Queue Free is free to read, has no ads, and stays that way.</p>
 		<p>
-			Queue Free is free to read, has no ads, and stays that way. Every page is written by hand, tested in a real
-			project, and kept up to date as Godot changes.
+			If an answer here saved you an evening, a small donation pays for hosting and buys time to write the next
+			page.
 		</p>
 		<p>
-			If an answer here saved you an evening, a coffee goes a long way. It pays for hosting and buys time to write
-			the next page.
+			You can also support in a different way: <a href="/write/">write a page</a> for a question you have seen
+			asked too many times.
 		</p>
 		<iframe
 			class="kofi-panel"
@@ -32,10 +33,6 @@ import { KOFI_NAME, KOFI_URL } from '../site.ts';
 		<p class="hint">
 			Ko-fi handles the payment. Queue Free never sees your card details. If the panel does not load,
 			<a href={KOFI_URL} target="_blank" rel="noopener">open Ko-fi directly</a>.
-		</p>
-		<p class="alt">
-			Prefer to help another way? <a href="/write/">Write a page</a> for a question you have seen asked too many
-			times.
 		</p>
 	</div>
 </StarlightPage>
@@ -62,12 +59,7 @@ import { KOFI_NAME, KOFI_URL } from '../site.ts';
 		color: var(--qf-muted);
 		font-size: var(--sl-text-sm);
 	}
-	.qf-support .alt {
-		padding-top: 1rem;
-		border-top: 1px solid var(--qf-line);
-	}
-	.qf-support .hint a,
-	.qf-support .alt a {
+	.qf-support a {
 		color: var(--qf-link);
 	}
 </style>
