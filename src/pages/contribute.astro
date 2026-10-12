@@ -13,6 +13,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 ---
 
 <StarlightPage
+	hasSidebar={false}
 	frontmatter={{
 		title: 'Write a page',
 		description: 'Propose a new Queue Free page without touching code. It goes to review before it is published.',
@@ -1244,6 +1245,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		font-size: var(--sl-text-h3);
 		font-weight: 700;
 		margin-top: 1.5rem;
+	}
+
+	/* No sidebar here, so keep the editor at a readable width. */
+	html:root:has(.qf-contribute) {
+		--sl-content-width: 50rem;
 	}
 
 	/* Once sent, only the confirmation stays on the page. */

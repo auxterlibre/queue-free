@@ -5,6 +5,9 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 
 <div class="qf-header">
 	<SiteTitle />
+	<nav class="tabs" aria-label="Site">
+		<a href="/contribute/" aria-current={Astro.url.pathname.startsWith('/contribute') ? 'page' : undefined}>Write a page</a>
+	</nav>
 	<div class="theme print:hidden">
 		<ThemeSelect />
 	</div>
@@ -14,8 +17,30 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 	.qf-header {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: 1.5rem;
 		height: 100%;
+	}
+	.tabs {
+		display: flex;
+		margin-left: auto;
+	}
+	.tabs a {
+		padding: 0.4rem 0.9rem;
+		border-radius: 999px;
+		color: var(--qf-muted);
+		font-size: var(--sl-text-sm);
+		font-weight: 600;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.tabs a:hover,
+	.tabs a:focus-visible {
+		color: var(--qf-text);
+		background: var(--qf-surface);
+	}
+	.tabs a[aria-current='page'] {
+		color: var(--qf-text);
+		background: var(--qf-surface);
 	}
 	.theme {
 		display: none;
