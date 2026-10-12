@@ -2,6 +2,10 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import categories from '../categories.json';
 import { NODE_GROUPS } from '../lib/contribute/godot-nodes.ts';
+import { dark, light } from '../styles/palette.mjs';
+import { godotTheme } from '../styles/code-theme.mjs';
+
+const codeThemes = { dark: godotTheme('godot-4-modern', 'dark', dark), light: godotTheme('godot-4-light', 'light', light) };
 
 // The site key is public. The local .env swaps in Turnstile's always-pass
 // test key, since the real widget only renders on queuefree.dev.
@@ -17,7 +21,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		lastUpdated: false,
 	}}
 >
-	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(categories)} data-node-groups={JSON.stringify(NODE_GROUPS)}>
+	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(categories)} data-node-groups={JSON.stringify(NODE_GROUPS)} data-code-themes={JSON.stringify(codeThemes)}>
 		<p class="intro">
 			Fill in the form, check the preview, and send it. Your page becomes a pull request that is reviewed before it goes
 			live. No account needed.
@@ -80,6 +84,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 <script>
 	import { generateMdx, pagePath } from '../lib/contribute/mdx.ts';
+	import { plainLines } from '../lib/contribute/code-lines.ts';
+	import type { CodeThemes, Highlighter } from '../lib/contribute/highlight.ts';
 	import {
 		LIMITS,
 		labelFromTitle,
@@ -362,6 +368,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	const textarea = (path: string, value: string, rows: number, attrs = '') =>
 		`<textarea data-path="${path}" rows="${rows}" ${attrs}>${esc(value)}</textarea>`;
 
+	const codeArea = (path: string, value: string, rows: number, lang: string, wrong = '', right = '') =>
+		`<div class="code-editor"><pre class="code-highlight" aria-hidden="true"><code>${plainLines(value)}</code></pre>` +
+		`<textarea data-path="${path}" rows="${rows}" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" data-lang="${lang}" data-wrong="${esc(wrong)}" data-right="${esc(right)}">${esc(value)}</textarea></div>`;
+
 	const select = (path: string, value: string, options: [string, string][]) =>
 		`<select data-path="${path}">${options
 			.map(([v, label]) => `<option value="${v}"${v === value ? ' selected' : ''}>${esc(label)}</option>`)
@@ -370,7 +380,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	function codeFields(path: string, snippet: { filename: string; code: string }, lang: string) {
 		return (
 			field('File name', `${path}.filename`, input(`${path}.filename`, snippet.filename, 'placeholder="main.gd"')) +
-			field(lang, `${path}.code`, textarea(`${path}.code`, snippet.code, 8, 'class="code" spellcheck="false"'))
+			field(lang, `${path}.code`, codeArea(`${path}.code`, snippet.code, 8, path.includes('.csharp') ? 'csharp' : 'gdscript'))
 		);
 	}
 
@@ -390,7 +400,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 					field('Language', `${p}.lang`, select(`${p}.lang`, block.lang, [['gdscript', 'GDScript'], ['csharp', 'C#'], ['txt', 'Plain text']])) +
 					field('File name', `${p}.filename`, input(`${p}.filename`, block.filename)) +
 					`</div>` +
-					field('Code', `${p}.code`, textarea(`${p}.code`, block.code, 8, 'class="code" spellcheck="false"')) +
+					field('Code', `${p}.code`, codeArea(`${p}.code`, block.code, 8, block.lang, block.wrong, block.right)) +
 					`<div class="row">` +
 					field('Mark as wrong (lines)', `${p}.wrong`, input(`${p}.wrong`, block.wrong, 'placeholder="1"')) +
 					field('Mark as right (lines)', `${p}.right`, input(`${p}.right`, block.right, 'placeholder="2"')) +
@@ -544,18 +554,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		return set;
 	}
 
-	function codePreview(code: string, filename: string, wrong = '', right = ''): string {
-		const del = lineSet(wrong);
-		const ins = lineSet(right);
-		const lines = code.replace(/\s+$/, '').split('\n');
-		const rows = lines
-			.map((line, i) => {
-				const n = i + 1;
-				const cls = del.has(n) ? ' del' : ins.has(n) ? ' ins' : '';
-				return `<span class="ln${cls}"><span class="n">${n}</span><span class="t">${esc(line) || ' '}</span></span>`;
-			})
-			.join('');
-		return `<figure class="qf-pre">${filename.trim() ? `<figcaption>${esc(filename)}</figcaption>` : ''}<pre><code>${rows}</code></pre></figure>`;
+	function codePreview(code: string, lang: string, filename: string, wrong = '', right = ''): string {
+		const trimmed = code.replace(/\s+$/, '');
+		const rows = plainLines(trimmed, { numbers: true, del: lineSet(wrong), ins: lineSet(right) });
+		return `<figure class="qf-pre">${filename.trim() ? `<figcaption>${esc(filename)}</figcaption>` : ''}<pre><code data-lang="${lang}" data-wrong="${esc(wrong)}" data-right="${esc(right)}" data-code="${esc(trimmed)}">${rows}</code></pre></figure>`;
 	}
 
 	function treePreview(text: string): string {
@@ -591,12 +593,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'prose':
 				return paragraphs(block.text);
 			case 'code':
-				return codePreview(block.code, block.filename, block.wrong, block.right);
+				return codePreview(block.code, block.lang, block.filename, block.wrong, block.right);
 			case 'tabs':
 				return (
 					`<div class="qf-tabs"><div class="tab-bar"><span class="on">GDScript</span>${block.csharp.code.trim() ? '<span>C#</span>' : ''}</div>` +
-					codePreview(block.gdscript.code, block.gdscript.filename) +
-					(block.csharp.code.trim() ? `<div class="tab-bar"><span>GDScript</span><span class="on">C#</span></div>` + codePreview(block.csharp.code, block.csharp.filename) : '') +
+					codePreview(block.gdscript.code, 'gdscript', block.gdscript.filename) +
+					(block.csharp.code.trim() ? `<div class="tab-bar"><span>GDScript</span><span class="on">C#</span></div>` + codePreview(block.csharp.code, 'csharp', block.csharp.filename) : '') +
 					`</div>`
 				);
 			case 'tree':
@@ -635,6 +637,63 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		const categories = JSON.parse(root.dataset.categories ?? '{}') as Categories;
 		const nodeGroups = JSON.parse(root.dataset.nodeGroups ?? '[]') as { label: string; types: string[] }[];
+		const codeThemes = JSON.parse(root.dataset.codeThemes ?? 'null') as CodeThemes | null;
+		let highlighter: Highlighter | null = null;
+		const highlightTimers = new WeakMap<HTMLTextAreaElement, number>();
+
+		const highlightField = (el: HTMLTextAreaElement) => {
+			const layer = el.parentElement?.querySelector<HTMLElement>('.code-highlight code');
+			if (!layer) return;
+			const lang = (el.dataset.lang ?? 'txt') as 'gdscript' | 'csharp' | 'txt';
+			const opts = { del: lineSet(el.dataset.wrong ?? ''), ins: lineSet(el.dataset.right ?? '') };
+			layer.innerHTML = highlighter ? highlighter.lines(el.value, lang, opts) : plainLines(el.value, opts);
+		};
+
+		const scheduleHighlight = (el: HTMLTextAreaElement) => {
+			clearTimeout(highlightTimers.get(el));
+			highlightTimers.set(el, window.setTimeout(() => highlightField(el), 40));
+		};
+
+		const highlightForm = () => {
+			for (const el of formEl.querySelectorAll<HTMLTextAreaElement>('textarea.code')) highlightField(el);
+		};
+
+		const highlightPreview = () => {
+			if (!highlighter) return;
+			for (const code of previewEl.querySelectorAll<HTMLElement>('.qf-pre code[data-code]')) {
+				const lang = (code.dataset.lang ?? 'txt') as 'gdscript' | 'csharp' | 'txt';
+				code.innerHTML = highlighter.lines(code.dataset.code ?? '', lang, {
+					numbers: true,
+					del: lineSet(code.dataset.wrong ?? ''),
+					ins: lineSet(code.dataset.right ?? ''),
+				});
+			}
+		};
+
+		if (codeThemes) {
+			import('../lib/contribute/highlight.ts')
+				.then((m) => m.Highlighter.create(codeThemes))
+				.then((h) => {
+					highlighter = h;
+					highlightForm();
+					highlightPreview();
+				})
+				.catch(() => {});
+		}
+
+		root.addEventListener(
+			'scroll',
+			(e) => {
+				const el = e.target as HTMLElement;
+				if (!(el instanceof HTMLTextAreaElement) || !el.classList.contains('code')) return;
+				const layer = el.parentElement?.querySelector<HTMLElement>('.code-highlight');
+				if (layer) {
+					layer.scrollTop = el.scrollTop;
+					layer.scrollLeft = el.scrollLeft;
+				}
+			},
+			true,
+		);
 		const picker = root.querySelector<HTMLDialogElement>('#qf-node-picker')!;
 		const pickerSearch = root.querySelector<HTMLInputElement>('#qf-node-search')!;
 		const pickerList = root.querySelector<HTMLElement>('#qf-node-list')!;
@@ -659,6 +718,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		const refreshOutputs = () => {
 			previewEl.innerHTML = renderPreview(draft.page);
 			sourceEl.textContent = generateMdx(draft.page);
+			highlightPreview();
 		};
 
 		const scheduleOutputs = () => {
@@ -668,6 +728,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		const renderAll = () => {
 			formEl.innerHTML = renderForm(draft, categories);
+			highlightForm();
 			refreshOutputs();
 		};
 
@@ -841,6 +902,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			const path = el.dataset.path;
 			if (!path) return;
 			setPath(draft, path, el.value);
+			if (el instanceof HTMLTextAreaElement && el.classList.contains('code')) scheduleHighlight(el);
+			if (path.endsWith('.wrong') || path.endsWith('.right')) {
+				const code = el.closest('.block')?.querySelector<HTMLTextAreaElement>('textarea.code');
+				if (code) {
+					code.dataset[path.endsWith('.wrong') ? 'wrong' : 'right'] = el.value;
+					scheduleHighlight(code);
+				}
+			}
 			const setField = (field: 'label' | 'slug', value: string) => {
 				draft.page[field] = value;
 				formEl.querySelector<HTMLInputElement>(`[data-path="page.${field}"]`)!.value = value;
@@ -929,6 +998,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		root.addEventListener('change', (e) => {
 			const el = e.target as HTMLSelectElement;
+			if (el.matches('select[data-path$=".lang"]')) {
+				const code = el.closest('.block')?.querySelector<HTMLTextAreaElement>('textarea.code');
+				if (code) {
+					code.dataset.lang = el.value;
+					highlightField(code);
+				}
+				return;
+			}
 			if (!el.matches('[data-pick-category]')) return;
 			draft.newCategory = el.value === '__new__';
 			draft.page.category = draft.newCategory ? '' : el.value;
@@ -1165,6 +1242,66 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute textarea {
 		resize: vertical;
+	}
+	.qf-contribute .code-editor {
+		position: relative;
+		border-radius: 0.5rem;
+		background: var(--qf-frame-code);
+		border: 1px solid var(--qf-frame-border);
+	}
+	.qf-contribute .code-editor:focus-within {
+		outline: 2px solid var(--qf-accent);
+		outline-offset: 1px;
+	}
+	.qf-contribute .code-editor pre,
+	.qf-contribute .code-editor textarea.code {
+		margin: 0;
+		padding: 0.6rem 0.75rem;
+		border: 0;
+		border-radius: 0.5rem;
+		background: transparent;
+		font-family: var(--sl-font-mono);
+		font-size: 0.875rem;
+		line-height: 1.5rem;
+		tab-size: 4;
+		white-space: pre;
+	}
+	.qf-contribute .code-editor pre {
+		position: absolute;
+		inset: 0;
+		overflow: hidden;
+		color: var(--qf-code-default);
+		pointer-events: none;
+	}
+	.qf-contribute .code-editor pre .ln {
+		display: block;
+		min-height: 1.5rem;
+	}
+	.qf-contribute .code-editor pre .ln.del {
+		background: color-mix(in srgb, var(--qf-code-error) 15%, transparent);
+	}
+	.qf-contribute .code-editor pre .ln.ins {
+		background: color-mix(in srgb, #7bd88f 15%, transparent);
+	}
+	.qf-contribute .code-editor textarea.code {
+		position: relative;
+		display: block;
+		color: transparent;
+		-webkit-text-fill-color: transparent;
+		caret-color: var(--qf-code-default);
+		overflow: auto;
+	}
+	.qf-contribute .code-editor textarea.code:focus-visible {
+		outline: none;
+	}
+	.qf-contribute .code-editor textarea.code::selection {
+		background: color-mix(in srgb, var(--qf-accent) 35%, transparent);
+	}
+	.qf-contribute .tok {
+		color: var(--shiki-dark);
+	}
+	:root[data-theme='light'] .qf-contribute .tok {
+		color: var(--shiki-light);
 	}
 	.qf-contribute textarea.code,
 	.qf-contribute #qf-source {
