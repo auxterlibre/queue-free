@@ -1,6 +1,6 @@
 ---
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
-import { KOFI_NAME, KOFI_URL } from '../site.ts';
+import { KOFI_URL } from '../site.ts';
 ---
 
 <StarlightPage
@@ -23,17 +23,13 @@ import { KOFI_NAME, KOFI_URL } from '../site.ts';
 			You can also support in a different way: <a href="/write/">write a page</a> for a question you have seen
 			asked too many times.
 		</p>
-		<iframe
-			class="kofi-panel"
-			src={`https://ko-fi.com/${KOFI_NAME}/?hidefeed=true&widget=true&embed=true&preview=true`}
-			height="560"
-			title="Support Queue Free on Ko-fi"
-			loading="lazy"
-		></iframe>
-		<p class="hint">
-			Ko-fi handles the payment. Queue Free never sees your card details. If the panel does not load,
-			<a href={KOFI_URL} target="_blank" rel="noopener">open Ko-fi directly</a>.
-		</p>
+		<a class="kofi" href={KOFI_URL} target="_blank" rel="noopener">
+			<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor">
+				<path d="M18 7h1a4 4 0 0 1 0 8h-1.1A6 6 0 0 1 12 20H8a6 6 0 0 1-6-6V7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1zm0 2v4h1a2 2 0 1 0 0-4h-1zM4 8v6a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V8H4z" />
+			</svg>
+			Buy me a coffee on Ko-fi
+		</a>
+		<p class="hint">Ko-fi handles the payment. Queue Free never sees your card details.</p>
 	</div>
 </StarlightPage>
 
@@ -49,11 +45,21 @@ import { KOFI_NAME, KOFI_URL } from '../site.ts';
 	.qf-support p {
 		margin: 0;
 	}
-	.qf-support .kofi-panel {
-		width: 100%;
-		border: 1px solid var(--qf-line);
-		border-radius: 0.75rem;
-		background: #f9f9f9;
+	.qf-support .kofi {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		align-self: flex-start;
+		padding: 0.8rem 1.5rem;
+		border-radius: 999px;
+		background: var(--qf-accent);
+		color: #fff;
+		font-weight: 600;
+		text-decoration: none;
+	}
+	.qf-support .kofi:hover,
+	.qf-support .kofi:focus-visible {
+		filter: brightness(1.1);
 	}
 	.qf-support .hint {
 		color: var(--qf-muted);
