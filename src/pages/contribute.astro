@@ -752,7 +752,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			for (const panel of root.querySelectorAll<HTMLElement>('[data-panel]')) panel.hidden = panel.dataset.panel !== mode;
 			for (const b of root.querySelectorAll<HTMLElement>('[data-mode]')) b.setAttribute('aria-selected', String(b.dataset.mode === mode));
 			if (mode !== 'write') refreshOutputs();
-			window.scrollTo({ top: scrollByMode[mode] ?? 0 });
+			root.toggleAttribute('data-done', mode === 'done');
+			window.scrollTo({ top: mode === 'done' ? 0 : (scrollByMode[mode] ?? 0) });
 		};
 
 		const clearIssues = () => {
@@ -1188,6 +1189,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		font-size: var(--sl-text-h3);
 		font-weight: 700;
 		margin-top: 1.5rem;
+	}
+
+	/* Once sent, only the confirmation stays on the page. */
+	.qf-contribute[data-done] .intro,
+	.qf-contribute[data-done] .modes-bar {
+		display: none;
 	}
 
 	/* Mode switch, pinned under the site header while the page scrolls */
