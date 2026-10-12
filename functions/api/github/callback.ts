@@ -15,7 +15,7 @@ interface Env {
 }
 
 const backToForm = (request: Request, status: string, extraCookie?: string) => {
-	const headers = new Headers({ location: new URL(`/contribute/?github=${status}`, request.url).toString() });
+	const headers = new Headers({ location: new URL(`/write/?github=${status}`, request.url).toString() });
 	headers.append('set-cookie', clearCookie(STATE_COOKIE));
 	if (extraCookie) headers.append('set-cookie', extraCookie);
 	return new Response(null, { status: 302, headers });

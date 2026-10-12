@@ -202,7 +202,7 @@ export async function onRequestPost({ request, env }: Context): Promise<Response
 	}
 
 	const session: GithubSession | null = env.SESSION_SECRET ? await openSession(env.SESSION_SECRET, request.headers.get('cookie')) : null;
-	const branch = `contribute/${page.slug}-${crypto.randomUUID().slice(0, 6)}`;
+	const branch = `write/${page.slug}-${crypto.randomUUID().slice(0, 6)}`;
 
 	try {
 		let pr: { html_url: string; number: number };

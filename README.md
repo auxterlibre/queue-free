@@ -21,7 +21,7 @@ Open http://localhost:4321.
 
 ## Contribute form
 
-`/contribute/` is a form that turns a filled-in page into a pull request. It needs a Cloudflare Pages Function (`functions/api/propose.ts`) and these settings on the Pages project:
+`/write/` is a form that turns a filled-in page into a pull request. It needs a Cloudflare Pages Function (`functions/api/propose.ts`) and these settings on the Pages project:
 
 | Where | Name | Value |
 |---|---|---|
@@ -40,7 +40,7 @@ With sign-in, the form forks the site under the contributor's account and opens 
 
 The sign-in asks for GitHub's `public_repo` scope, the smallest one that allows forking and opening pull requests on a public repository. The token lives only in an encrypted, HttpOnly cookie for eight hours. Optional variables: `GITHUB_REPO` (`owner/repo`, defaults to this repo) and `GITHUB_BASE` (defaults to `main`).
 
-The widget's site key is public and lives in `src/pages/contribute.astro`. For local work copy `.env.example` to `.env`: it sets `PUBLIC_TURNSTILE_SITE_KEY` to Turnstile's always-pass test key, since the real widget only renders on `queuefree.dev`. Pair it with the test secret `1x0000000000000000000000000000000AA` when running the function locally.
+The widget's site key is public and lives in `src/pages/write.astro`. For local work copy `.env.example` to `.env`: it sets `PUBLIC_TURNSTILE_SITE_KEY` to Turnstile's always-pass test key, since the real widget only renders on `queuefree.dev`. Pair it with the test secret `1x0000000000000000000000000000000AA` when running the function locally.
 
 ## Build
 
