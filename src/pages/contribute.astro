@@ -2,7 +2,9 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import categories from '../categories.json';
 
-const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
+// The site key is public. The local .env swaps in Turnstile's always-pass
+// test key, since the real widget only renders on queuefree.dev.
+const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk5zdVB0';
 ---
 
 <StarlightPage
@@ -569,7 +571,13 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY ?? '';
 				window.setTimeout(mountTurnstile, 200);
 				return;
 			}
-			turnstileId = window.turnstile.render(el, { sitekey: siteKey, theme: 'auto' });
+			turnstileId = window.turnstile.render(el, {
+				sitekey: siteKey,
+				action: 'propose',
+				theme: 'auto',
+				'expired-callback': () => window.turnstile?.reset(turnstileId),
+				'error-callback': () => false,
+			});
 		};
 
 		const submit = async () => {

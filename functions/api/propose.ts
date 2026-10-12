@@ -35,13 +35,15 @@ async function overRateLimit(kv: KVNamespace | undefined, ip: string): Promise<b
 }
 
 async function turnstilePassed(secret: string, token: string, ip: string): Promise<boolean> {
-	const body = new FormData();
-	body.set('secret', secret);
-	body.set('response', token);
-	body.set('remoteip', ip);
-	const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body });
-	const data = (await res.json()) as { success?: boolean };
-	return data.success === true;
+	if (!token) return false;
+	const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ secret, response: token, remoteip: ip, idempotency_key: crypto.randomUUID() }),
+	});
+	const data = (await res.json()) as { success?: boolean; action?: string };
+	// The widget is rendered with action "propose"; a token minted elsewhere is refused.
+	return data.success === true && (data.action ?? 'propose') === 'propose';
 }
 
 function github(env: Env) {

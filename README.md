@@ -25,14 +25,13 @@ Open http://localhost:4321.
 
 | Where | Name | Value |
 |---|---|---|
-| Build variable | `PUBLIC_TURNSTILE_SITE_KEY` | Site key of a [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) widget for `queuefree.dev` |
-| Secret | `TURNSTILE_SECRET` | Secret key of the same widget |
+| Secret | `TURNSTILE_SECRET` | Secret key of the [Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) widget for `queuefree.dev` |
 | Secret | `GITHUB_TOKEN` | Fine-grained token for this repo with **Contents: read and write** and **Pull requests: read and write** |
 | KV binding (optional) | `RATE_LIMIT` | Any KV namespace, used to cap submissions per IP |
 
 Pull requests are opened by the token's account. Optional variables: `GITHUB_REPO` (`owner/repo`, defaults to this repo) and `GITHUB_BASE` (defaults to `main`).
 
-Without `PUBLIC_TURNSTILE_SITE_KEY` the form builds with sending disabled. For local work copy `.env.example` to `.env`; it holds Turnstile's always-pass test key.
+The widget's site key is public and lives in `src/pages/contribute.astro`. For local work copy `.env.example` to `.env`: it sets `PUBLIC_TURNSTILE_SITE_KEY` to Turnstile's always-pass test key, since the real widget only renders on `queuefree.dev`. Pair it with the test secret `1x0000000000000000000000000000000AA` when running the function locally.
 
 ## Build
 
