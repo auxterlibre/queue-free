@@ -24,10 +24,8 @@ import { KOFI_URL } from '../site.ts';
 			asked too many times.
 		</p>
 		<a class="kofi" href={KOFI_URL} target="_blank" rel="noopener">
-			<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="currentColor">
-				<path d="M18 7h1a4 4 0 0 1 0 8h-1.1A6 6 0 0 1 12 20H8a6 6 0 0 1-6-6V7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1zm0 2v4h1a2 2 0 1 0 0-4h-1zM4 8v6a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V8H4z" />
-			</svg>
-			Buy me a coffee on Ko-fi
+			<img src="/kofi-heart.webp" alt="" width="48" height="48" />
+			Support me on Ko-Fi
 		</a>
 		<p class="hint">Ko-fi handles the payment. Queue Free never sees your card details.</p>
 	</div>
@@ -48,18 +46,27 @@ import { KOFI_URL } from '../site.ts';
 	.qf-support .kofi {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: 1rem;
 		align-self: flex-start;
-		padding: 0.8rem 1.5rem;
-		border-radius: 999px;
+		padding: 0.5rem 2rem 0.5rem 1rem;
+		border-radius: 46px;
 		background: var(--qf-accent);
 		color: #fff;
-		font-weight: 600;
+		font-size: 1rem;
+		font-weight: 700;
+		line-height: 1.5rem;
 		text-decoration: none;
+	}
+	.qf-support .kofi img {
+		width: 3rem;
+		height: 3rem;
 	}
 	.qf-support .kofi:hover,
 	.qf-support .kofi:focus-visible {
-		filter: brightness(1.1);
+		background: linear-gradient(to right, #bf8547, #a8338d);
+	}
+	.qf-support .kofi:active {
+		background: linear-gradient(to right, #bf6b47, #7533a8);
 	}
 	.qf-support .hint {
 		color: var(--qf-muted);
