@@ -1,11 +1,12 @@
 ---
 import '@pagefind/default-ui/css/ui.css';
 
-const { title } = Astro.locals.starlightRoute.entry.data.hero ?? {};
+const { title, tagline } = Astro.locals.starlightRoute.entry.data.hero ?? {};
 ---
 
 <section class="qf-hero">
 	<h1>{title}</h1>
+	{tagline && <p class="tagline">{tagline}</p>}
 	{
 		import.meta.env.DEV ? (
 			<input class="dev-search" type="search" placeholder="Search (works in the built site)" disabled />
@@ -69,6 +70,11 @@ const { title } = Astro.locals.starlightRoute.entry.data.hero ?? {};
 		-webkit-background-clip: text;
 		background-clip: text;
 		color: transparent;
+	}
+	.tagline {
+		margin: 0;
+		text-align: center;
+		color: var(--qf-muted);
 	}
 	.dev-search,
 	#qf-search {

@@ -442,3 +442,9 @@ starlight-toc nav {
 .sl-markdown-content :is(th, td):last-child {
 	width: 15.5rem;
 }
+
+.qf-404-home {
+	max-width: 35rem;
+	margin: 2rem auto 0;
+	text-align: center;
+}
