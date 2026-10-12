@@ -6,7 +6,10 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 <div class="qf-header">
 	<SiteTitle />
 	<nav class="tabs" aria-label="Site">
-		<a href="/write/" aria-current={Astro.url.pathname.startsWith('/write') ? 'page' : undefined}>Write a page</a>
+		<a href="/write/" aria-current={Astro.url.pathname.startsWith('/write') ? 'page' : undefined}>
+			<span class="full">Write a page</span><span class="short" aria-hidden="true">Write</span>
+		</a>
+		<a href="/support/" aria-current={Astro.url.pathname.startsWith('/support') ? 'page' : undefined}>Support</a>
 	</nav>
 	<div class="theme print:hidden">
 		<ThemeSelect />
@@ -22,10 +25,14 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 	}
 	.tabs {
 		display: flex;
+		gap: 0.25rem;
 		margin-left: auto;
 	}
+	.tabs .full {
+		display: none;
+	}
 	.tabs a {
-		padding: 0.4rem 0.9rem;
+		padding: 0.4rem 0.7rem;
 		border-radius: 999px;
 		color: var(--qf-muted);
 		font-size: var(--sl-text-sm);
@@ -46,6 +53,15 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 		display: none;
 	}
 	@media (min-width: 50rem) {
+		.tabs a {
+			padding: 0.4rem 0.9rem;
+		}
+		.tabs .full {
+			display: inline;
+		}
+		.tabs .short {
+			display: none;
+		}
 		.theme {
 			display: flex;
 		}
