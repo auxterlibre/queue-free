@@ -5,8 +5,8 @@
 	--qf-text: #c9c9c9;
 	--qf-muted: #6b6b6b;
 	--qf-line: #4a4a4a;
-	--qf-accent: #57a0ff;
-	--qf-link: #569eff;
+	--qf-accent: #478cbf;
+	--qf-link: #478cbf;
 	--qf-tag: #262626;
 
 	--sl-color-bg: var(--qf-bg);
@@ -35,8 +35,8 @@
 	--qf-text: #292929;
 	--qf-muted: #6b6b6b;
 	--qf-line: #c9c9c9;
-	--qf-accent: #2e80ff;
-	--qf-link: #1f6fe5;
+	--qf-accent: #478cbf;
+	--qf-link: #478cbf;
 	--qf-tag: #b3b3b3;
 }
 
