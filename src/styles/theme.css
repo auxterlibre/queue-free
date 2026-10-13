@@ -104,6 +104,11 @@
 	animation: none;
 }
 
+/* Starlight only centres content from 72rem up; pages without a sidebar should centre at any width. */
+html:not([data-has-sidebar]) .sl-container {
+	margin-inline: auto;
+}
+
 .content-panel h1 {
 	margin-top: 0.5rem;
 }
