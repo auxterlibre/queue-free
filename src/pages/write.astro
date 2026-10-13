@@ -1711,23 +1711,33 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		flex-direction: column;
 		gap: 0.25rem;
 		padding: 0.5rem 1rem;
-		border: 1px solid transparent;
+		border: 1px solid var(--qf-muted);
 		border-radius: 0.5rem;
 		background: linear-gradient(180deg, color-mix(in srgb, var(--qf-muted) 10%, transparent), transparent), var(--qf-surface);
 		cursor: pointer;
+		user-select: none;
 	}
-	.qf-contribute .kind .label {
-		padding: 0.35rem 0;
-	}
+	.qf-contribute .kind .label,
 	.qf-contribute .kind .hint {
 		padding: 0;
+		line-height: 1.5rem;
 	}
 	.qf-contribute .kind:hover {
+		border-color: var(--qf-accent);
+	}
+	.qf-contribute .kind:active {
 		border-color: var(--qf-muted);
+		background: linear-gradient(0deg, color-mix(in srgb, var(--qf-muted) 10%, transparent), transparent), var(--qf-surface);
+	}
+	.qf-contribute .kind:active .label {
+		color: var(--qf-muted);
 	}
 	.qf-contribute .kind.selected {
 		border-color: var(--qf-accent);
 		background: linear-gradient(color-mix(in srgb, var(--qf-accent) 12%, transparent), color-mix(in srgb, var(--qf-accent) 12%, transparent)), var(--qf-surface);
+	}
+	.qf-contribute .kind.selected .label {
+		color: var(--qf-accent);
 	}
 	.qf-contribute .kind:has(input:focus-visible) {
 		outline: 2px solid var(--qf-accent);
