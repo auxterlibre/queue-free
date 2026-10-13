@@ -7,7 +7,6 @@ sidebar:
 ---
 
 import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
-import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
 <Aside type="tip" title="Short answer">
@@ -31,14 +30,6 @@ You'll see something like one of these in the script editor and the **Debugger**
 | The error says `Unexpected indentation` | [A line indented when it should not be](#a-line-indented-when-it-should-not-be) |
 | The error is something else and points at the end of a function | [Code outside the function it was meant for](#code-outside-the-function-it-was-meant-for) |
 
-## The example scene
-
-The script is on `Player`.
-
-<SceneTree tree={`
-  Player: CharacterBody2D [script] "script attached here"
-`} />
-
 GDScript uses indentation instead of braces to say which lines belong to a function or an `if`. That makes the exact whitespace at the start of each line part of the code, so one wrong tab breaks the script.
 
 ## Mixed tabs and spaces
@@ -58,12 +49,15 @@ func _physics_process(delta: float) -> void:
 
 A `func`, `if`, `for` or `match` line ends with a colon and promises indented lines underneath. If nothing is there yet, Godot reports `Expected indented block`:
 
+```gdscript title="player.gd"
+func take_damage(amount: int) -> void:
+```
+
+With `pass` in the body the error goes away:
+
 ```gdscript title="player.gd" ins={2}
 func take_damage(amount: int) -> void:
 	pass
-
-func _physics_process(delta: float) -> void:
-	move_and_slide()
 ```
 
 **Fix: put `pass` in the block until you write the body.** It does nothing and keeps the parser happy.
