@@ -68,9 +68,7 @@ function renderBlock(block: Block): string {
 			return `:::${block.kind}[${title}]\n${escapeProse(block.text)}\n:::`;
 		}
 		case 'error': {
-			const source = block.source.trim();
-			const props = [source ? `source={${templateLiteral(source)}}` : '', `message={${templateLiteral(block.message.trim())}}`];
-			return `<GodotError ${props.filter(Boolean).join(' ')} />`;
+			return `<GodotError message={${templateLiteral(block.message.trim())}} />`;
 		}
 		case 'steps': {
 			const items = block.items.map((item, i) => {

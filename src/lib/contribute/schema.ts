@@ -23,7 +23,7 @@ export type Block =
 	| { type: 'tabs'; gdscript: CodeSnippet; csharp: CodeSnippet }
 	| { type: 'tree'; text: string }
 	| { type: 'callout'; kind: CalloutKind; title: string; text: string }
-	| { type: 'error'; source: string; message: string }
+	| { type: 'error'; message: string }
 	| { type: 'steps'; items: string[] }
 	| { type: 'causes'; rows: CauseRow[] };
 
@@ -212,7 +212,6 @@ function checkBlock(issues: Issue[], path: string, value: unknown, headings: str
 			checkProse(issues, `${path}.text`, b.text, LIMITS.text);
 			break;
 		case 'error':
-			checkText(issues, `${path}.source`, b.source, 80, false);
 			checkText(issues, `${path}.message`, b.message, LIMITS.text);
 			break;
 		case 'steps': {

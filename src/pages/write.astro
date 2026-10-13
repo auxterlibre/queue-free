@@ -23,11 +23,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}}
 >
 	<div class="qf-contribute not-content" id="qf-contribute" data-site-key={siteKey} data-categories={JSON.stringify(categories)} data-node-groups={JSON.stringify(NODE_GROUPS)} data-code-themes={JSON.stringify(codeThemes)}>
-		<p class="intro">
-			Fill in the form, check the preview, and send it. Your page will be reviewed as soon as possible before it goes
-			live.
-		</p>
-
 		<div class="modes-bar">
 			<div class="modes" role="tablist">
 				<button type="button" data-action="set-mode" data-mode="write" aria-selected="true">Write</button>
@@ -35,6 +30,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				<button type="button" data-action="set-mode" data-mode="source" aria-selected="false">Source</button>
 			</div>
 		</div>
+
+		<p class="intro">
+			Fill in the form, check the preview, and send it. Your page will be reviewed as soon as possible before it goes
+			live.
+		</p>
 
 		<section class="panel" data-panel="write">
 			<div id="qf-form"></div>
@@ -128,7 +128,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	const BLOCK_NAMES: Record<BlockType, string> = {
 		heading: 'Section heading',
-		prose: 'Text',
+		prose: 'Plain text',
 		code: 'Code',
 		tabs: 'Code blocks',
 		tree: 'Scene tree',
@@ -139,11 +139,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	};
 
 	const BLOCK_HELP: Partial<Record<BlockType, string>> = {
-		prose: 'Plain text. Wrap code in `backticks` and use **double stars** for bold. A blank line starts a new paragraph.',
-		tree: 'Build the scene like in Godot. Use + to add a child node, rename it, and mark the node that holds the script.',
-		code: 'Tab indents and Shift+Tab outdents, like in the Godot editor. Line numbers like 2 or 1-3 mark lines as wrong or right.',
-		steps: 'Numbered steps for things to do in the editor.',
-		causes: 'Sends readers to the right section. Each row pairs a symptom they can check with the heading to go to.',
+		tree: 'Use + to add a child node, rename it, and mark the node that holds the script.',
+		code: 'Tab indents and Shift+Tab outdents. Line numbers like 2 or 1-3 mark lines as wrong or right.',
+	};
+
+	const ICONS = {
+		up: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M14 20V8m0 0-4.5 4.5M14 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+		down: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M14 8v12m0 0-4.5-4.5M14 20l4.5-4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+		trash: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="13" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 10.5h10M12.5 8h3M10.5 10.5l.6 9h5.8l.6-9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 	};
 
 	const esc = (s: string) =>
@@ -164,7 +167,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'callout':
 				return { type, kind: 'note', title: '', text: '' };
 			case 'error':
-				return { type, source: '_ready()', message: '' };
+				return { type, message: '' };
 			case 'steps':
 				return { type, items: [''] };
 			case 'causes':
@@ -177,7 +180,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			return [
 				{ type: 'heading', text: 'The error' },
 				{ type: 'prose', text: "You'll see something like this in the **Debugger** panel. The names will be your own:" },
-				{ type: 'error', source: '_ready()', message: '' },
+				{ type: 'error', message: '' },
 				{ type: 'heading', text: 'Which cause is it?' },
 				{
 					type: 'causes',
@@ -376,7 +379,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	// Form rendering
 
 	const field = (label: string, path: string, control: string, hint = '') =>
-		`<label class="field"><span class="label">${esc(label)}</span>${control}${hint ? `<span class="hint">${hint}</span>` : ''}<span class="error" data-error-for="${path}"></span></label>`;
+		`<label class="field"><span class="label">${esc(label)}</span>${hint ? `<span class="hint">${hint}</span>` : ''}${control}<span class="error" data-error-for="${path}"></span></label>`;
+
+	// A control without its own label, for blocks whose name says what it is.
+	const bare = (path: string, control: string) => `<div class="field">${control}<span class="error" data-error-for="${path}"></span></div>`;
 
 	const input = (path: string, value: string, attrs = '') =>
 		`<input type="text" data-path="${path}" value="${esc(value)}" ${attrs}>`;
@@ -408,10 +414,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		let body = '';
 		switch (block.type) {
 			case 'heading':
-				body = field('Heading', `${p}.text`, input(`${p}.text`, block.text));
+				body = bare(`${p}.text`, input(`${p}.text`, block.text, 'aria-label="Section heading"'));
 				break;
 			case 'prose':
-				body = field('Text', `${p}.text`, textarea(`${p}.text`, block.text, 4));
+				body = bare(`${p}.text`, textarea(`${p}.text`, block.text, 4, 'aria-label="Plain text"'));
 				break;
 			case 'code':
 				body =
@@ -442,9 +448,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 					field('Text', `${p}.text`, textarea(`${p}.text`, block.text, 3));
 				break;
 			case 'error':
-				body =
-					field('Where it happens', `${p}.source`, input(`${p}.source`, block.source, 'placeholder="_ready()"')) +
-					field('Error text', `${p}.message`, textarea(`${p}.message`, block.message, 2, 'class="code" spellcheck="false"'));
+				body = bare(`${p}.message`, textarea(`${p}.message`, block.message, 3, 'class="code" spellcheck="false" aria-label="Error message"'));
 				break;
 			case 'steps':
 				body =
@@ -480,9 +484,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			<div class="block-head">
 				<span class="block-name">${BLOCK_NAMES[block.type]}</span>
 				<span class="block-tools">
-					<button type="button" class="small" data-action="move-block" data-index="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
-					<button type="button" class="small" data-action="move-block" data-index="${i}" data-dir="1" ${i === count - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
-					<button type="button" class="small" data-action="remove-block" data-index="${i}">Remove</button>
+					<button type="button" class="icon" data-action="move-block" data-index="${i}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up" title="Move up">${ICONS.up}</button>
+					<button type="button" class="icon" data-action="move-block" data-index="${i}" data-dir="1" ${i === count - 1 ? 'disabled' : ''} aria-label="Move down" title="Move down">${ICONS.down}</button>
+					<button type="button" class="icon" data-action="remove-block" data-index="${i}" aria-label="Remove block" title="Remove">${ICONS.trash}</button>
 				</span>
 			</div>
 			${help ? `<p class="hint">${help}</p>` : ''}
@@ -509,6 +513,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		return `
 		<fieldset class="kinds">
 			<legend>What kind of page is it?</legend>
+			<div class="kind-list">
 			${kinds
 				.map(
 					([k, label, hint]) => `<label class="kind${page.kind === k ? ' selected' : ''}">
@@ -516,13 +521,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 					<span class="label">${label}</span><span class="hint">${hint}</span></label>`,
 				)
 				.join('')}
+			</div>
 		</fieldset>
 
 		${field('Title', 'page.title', input('page.title', page.title, `placeholder="${page.kind === 'error' ? 'Why does it say ...?' : 'How do I ...?'}" maxlength="${LIMITS.title}"`), 'Write it as the question people search for.')}
 		${field('Description', 'page.description', textarea('page.description', page.description, 2, `maxlength="${LIMITS.description}"`), 'One sentence shown in search results.')}
 		<div class="row">
 			${field('Category', 'page.category', categoryPick)}
-			${field('Sidebar name', 'page.label', input('page.label', page.label, `maxlength="${LIMITS.label}"`), 'Short, for the menu.')}
+			${field('Sidebar name', 'page.label', input('page.label', page.label, `maxlength="${LIMITS.label}"`))}
 		</div>
 		${newCategoryFields}
 		${field('Address', 'page.slug', `<span class="slug"><span class="prefix">queuefree.dev/${esc(page.category)}/</span>${input('page.slug', page.slug)}</span>`)}
@@ -675,7 +681,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'callout':
 				return aside(block.kind, block.title || block.kind, paragraphs(block.text));
 			case 'error':
-				return `<div class="qf-godot-error"><span class="dot"></span><span>${esc(block.source.trim() ? `${block.source.trim()}: ${block.message}` : block.message)}</span></div>`;
+				return `<div class="qf-godot-error"><span class="dot"></span><span>${esc(block.message)}</span></div>`;
 			case 'steps':
 				return `<ol class="qf-steps">${block.items.map((s) => `<li>${paragraphs(s)}</li>`).join('')}</ol>`;
 			case 'causes': {
@@ -1268,20 +1274,23 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 <style is:global>
 	.qf-contribute {
 		--qf-field-bg: var(--qf-surface);
+		--qf-field-line: var(--qf-muted);
+		--qf-field-shadow: inset 0 4px 4px rgb(0 0 0 / 0.25);
 		--qf-danger: #ff6b6b;
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 2rem;
 		font-size: var(--sl-text-base);
 	}
 	.qf-contribute .intro {
 		color: var(--qf-text);
+		line-height: 1.5rem;
 	}
 	.qf-contribute .hint {
 		display: block;
 		color: var(--qf-muted);
 		font-size: var(--sl-text-sm);
-		line-height: 1.4;
+		line-height: 1.5rem;
 	}
 	.qf-contribute .notice {
 		padding: 0.75rem 1rem;
@@ -1289,15 +1298,26 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		background: var(--qf-surface);
 		color: var(--qf-muted);
 	}
-	.qf-contribute h2 {
-		font-size: var(--sl-text-h3);
+	.qf-contribute h2,
+	.qf-contribute .kinds legend {
+		font-size: 1.5rem;
 		font-weight: 700;
-		margin-top: 1.5rem;
+		line-height: 1.2;
+		margin: 0.5rem 0 0;
+		padding: 0;
+	}
+
+	:root[data-theme='light'] .qf-contribute {
+		--qf-field-shadow: inset 0 4px 4px rgb(0 0 0 / 0.12);
 	}
 
 	/* No sidebar here, so keep the editor at a readable width. */
 	html:root:has(.qf-contribute) {
-		--sl-content-width: 50rem;
+		--sl-content-width: 37rem;
+	}
+	/* The sticky mode tabs stand in for the page title. */
+	html:root:has(.qf-contribute) .content-panel:has(h1#_top) {
+		display: none;
 	}
 
 	/* Once sent, only the confirmation stays on the page. */
@@ -1317,32 +1337,33 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .modes {
 		display: flex;
-		gap: 0.25rem;
-		padding: 0.25rem;
-		border-radius: 999px;
-		background: var(--qf-surface);
-		width: fit-content;
+		padding: 2px;
+		border: 1px solid var(--qf-muted);
+		border-radius: 15px;
+		background: var(--qf-bg);
 	}
 	.qf-contribute .modes button {
+		flex: 1;
 		border: 0;
 		background: none;
 		color: var(--qf-muted);
-		padding: 0.4rem 1rem;
-		border-radius: 999px;
+		padding: 0 1rem;
+		border-radius: 12px;
+		line-height: 1.5rem;
 		cursor: pointer;
 		font: inherit;
 	}
 	.qf-contribute .modes button:hover,
 	.qf-contribute .modes button:focus-visible {
 		color: var(--qf-text);
-		background: color-mix(in srgb, var(--qf-bg) 50%, transparent);
+		background: color-mix(in srgb, var(--qf-muted) 20%, transparent);
 	}
 	.qf-contribute .modes button:focus-visible {
 		outline: 2px solid var(--qf-accent);
 		outline-offset: -2px;
 	}
 	.qf-contribute .modes button[aria-selected='true'] {
-		background: var(--qf-bg);
+		background: color-mix(in srgb, var(--qf-muted) 50%, transparent);
 		color: var(--qf-text);
 	}
 	@media (prefers-reduced-motion: no-preference) {
@@ -1358,44 +1379,71 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .panel {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 2rem;
 	}
 	.qf-contribute #qf-form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 2rem;
 	}
 	.qf-contribute .field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.35rem;
 		flex: 1;
 		min-width: 0;
 	}
+	.qf-contribute .field > .label {
+		padding-bottom: 0.5rem;
+	}
+	.qf-contribute .field > .label:has(+ .hint) {
+		padding-bottom: 0;
+	}
+	.qf-contribute .field > .hint {
+		padding-bottom: 0.5rem;
+	}
 	.qf-contribute .label {
-		font-weight: 600;
+		font-weight: 700;
+		line-height: 1.5rem;
 		color: var(--qf-text);
 	}
 	.qf-contribute input[type='text'],
 	.qf-contribute textarea,
 	.qf-contribute select {
 		width: 100%;
-		padding: 0.6rem 0.75rem;
-		border: 1px solid var(--qf-line);
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--qf-field-line);
 		border-radius: 0.5rem;
 		background: var(--qf-field-bg);
+		box-shadow: var(--qf-field-shadow);
 		color: var(--qf-text);
 		font: inherit;
-		line-height: 1.4;
+		line-height: 1.5rem;
+	}
+	.qf-contribute input::placeholder,
+	.qf-contribute textarea::placeholder {
+		color: var(--qf-muted);
+		font-size: var(--sl-text-sm);
 	}
 	.qf-contribute textarea {
 		resize: vertical;
+	}
+	.qf-contribute select {
+		appearance: none;
+		padding-right: 2.75rem;
+		box-shadow: none;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23c9c9c9'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0.25rem center;
+	}
+	:root[data-theme='light'] .qf-contribute select {
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z' fill='%23292929'/%3E%3C/svg%3E");
 	}
 	.qf-contribute .code-editor {
 		position: relative;
 		border-radius: 0.5rem;
 		background: var(--qf-frame-code);
 		border: 1px solid var(--qf-frame-border);
+		box-shadow: var(--qf-field-shadow);
 	}
 	.qf-contribute .code-editor:focus-within {
 		outline: 2px solid var(--qf-accent);
@@ -1404,10 +1452,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .code-editor pre,
 	.qf-contribute .code-editor textarea.code {
 		margin: 0;
-		padding: 0.6rem 0.75rem;
+		padding: 0.5rem 1rem;
 		border: 0;
 		border-radius: 0.5rem;
 		background: transparent;
+		box-shadow: none;
 		font-family: var(--sl-font-mono);
 		font-size: 0.875rem;
 		line-height: 1.5rem;
@@ -1476,13 +1525,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .slug {
 		display: flex;
 		align-items: center;
-		border: 1px solid var(--qf-line);
+		border: 1px solid var(--qf-field-line);
 		border-radius: 0.5rem;
 		background: var(--qf-field-bg);
+		box-shadow: var(--qf-field-shadow);
 		overflow: hidden;
 	}
 	.qf-contribute .slug .prefix {
-		padding: 0 0 0 0.75rem;
+		padding: 0 0 0 1rem;
 		color: var(--qf-muted);
 		white-space: nowrap;
 		font-size: var(--sl-text-sm);
@@ -1490,6 +1540,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .slug input {
 		border: 0;
 		background: none;
+		box-shadow: none;
 		padding-left: 0.1rem;
 	}
 	.qf-contribute .error:not(:empty) {
@@ -1507,35 +1558,53 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 
 	.qf-contribute .kinds {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-		gap: 0.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
 		border: 0;
 		padding: 0;
 		margin: 0;
 	}
-	.qf-contribute .kinds legend {
-		font-weight: 600;
-		margin-bottom: 0.5rem;
+	.qf-contribute .kind-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
 	}
 	.qf-contribute .kind {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		padding: 0.9rem 1rem;
-		border: 1px solid var(--qf-line);
+		padding: 0.5rem 1rem;
+		border: 1px solid transparent;
 		border-radius: 0.5rem;
+		background: linear-gradient(180deg, color-mix(in srgb, var(--qf-muted) 10%, transparent), transparent), var(--qf-surface);
 		cursor: pointer;
+	}
+	.qf-contribute .kind .label {
+		padding: 0.35rem 0;
+	}
+	.qf-contribute .kind .hint {
+		padding: 0;
+	}
+	.qf-contribute .kind:hover {
+		border-color: var(--qf-muted);
 	}
 	.qf-contribute .kind.selected {
 		border-color: var(--qf-accent);
-		background: var(--qf-surface);
+		background: linear-gradient(color-mix(in srgb, var(--qf-accent) 12%, transparent), color-mix(in srgb, var(--qf-accent) 12%, transparent)), var(--qf-surface);
+	}
+	.qf-contribute .kind:has(input:focus-visible) {
+		outline: 2px solid var(--qf-accent);
+		outline-offset: 1px;
 	}
 	.qf-contribute .kind input {
 		position: absolute;
 		opacity: 0;
 	}
 
+	.qf-contribute h2 + .blocks {
+		margin-top: 1rem;
+	}
 	.qf-contribute .blocks {
 		display: flex;
 		flex-direction: column;
@@ -1544,15 +1613,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .block {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1rem;
-		border: 1px solid var(--qf-line);
+		gap: 0.5rem;
+		padding: 0.5rem 1rem 1rem;
 		border-radius: 0.5rem;
+		background: linear-gradient(180deg, color-mix(in srgb, var(--qf-text) 10%, transparent), color-mix(in srgb, var(--qf-text) 5%, transparent));
 	}
-	.qf-contribute .block .field {
-		gap: 0.25rem;
-	}
-	.qf-contribute .block .label {
+	.qf-contribute .block .field > .label {
 		font-size: var(--sl-text-sm);
 	}
 	.qf-contribute .block-head {
@@ -1560,13 +1626,35 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		justify-content: space-between;
 		align-items: center;
 		gap: 0.5rem;
+		min-height: 2.1875rem;
 	}
 	.qf-contribute .block-name {
-		font-weight: 600;
+		font-weight: 700;
+		line-height: 1.5rem;
 	}
 	.qf-contribute .block-tools {
 		display: flex;
-		gap: 0.25rem;
+		gap: 0.5rem;
+	}
+	.qf-contribute button.icon {
+		display: inline-flex;
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		background: none;
+		color: var(--qf-text);
+	}
+	.qf-contribute button.icon:hover:not(:disabled),
+	.qf-contribute button.icon:focus-visible {
+		color: var(--qf-accent);
+	}
+	.qf-contribute button.icon:focus-visible {
+		outline: 2px solid var(--qf-accent);
+		outline-offset: 1px;
+	}
+	.qf-contribute button.icon:disabled {
+		color: var(--qf-muted);
+		opacity: 0.6;
 	}
 	.qf-contribute .sub {
 		display: flex;
@@ -1733,6 +1821,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		padding: 0.2rem 0.45rem;
 		border-color: transparent;
 		background: transparent;
+		box-shadow: none;
 		font-size: var(--sl-text-sm);
 		color: inherit;
 	}
@@ -1824,10 +1913,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .picker-head input {
 		flex: 1;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid var(--qf-line);
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--qf-field-line);
 		border-radius: 0.5rem;
 		background: var(--qf-surface);
+		box-shadow: var(--qf-field-shadow);
 		color: var(--qf-text);
 		font: inherit;
 	}
