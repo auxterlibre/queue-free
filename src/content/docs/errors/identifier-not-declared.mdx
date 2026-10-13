@@ -6,7 +6,7 @@ sidebar:
   label: Identifier not declared
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -117,10 +117,3 @@ func _physics_process(delta: float) -> void:
 ## Still stuck?
 
 The error gives you the exact identifier and the line number. Press <kbd>Ctrl</kbd>+<kbd>F</kbd> in the script editor and search for `var speed` (with your own name). If it turns up nothing, it's a typo or a missing autoload. If it does turn up, look at which function that `var` line is inside and compare it with the function the failing line is in. If they differ, that's your answer.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="Why is my node null?" description="The variable exists, but the node it should hold doesn't." href="/errors/node-is-null/" />
-	<LinkCard title="GDScript variables" description="Official docs on declaring variables and where they live." href="https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html#variables" />
-</CardGrid>

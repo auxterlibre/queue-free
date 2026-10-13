@@ -6,7 +6,7 @@ sidebar:
   label: Signal already connected
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -135,10 +135,3 @@ Most of the time you don't need to disconnect at all. When a node is freed, ever
 ## Still stuck?
 
 Click the error in the **Debugger** panel and look at the stack trace underneath. It lists the exact line that tried to connect, and the lines that called it, so you can see which path ran twice. If the trace only shows one `connect()` and the editor shows no green icon, print `$Button.pressed.get_connections()` in `_ready()`. It lists every connection on that signal, with the function each one points at, so you can see where the first one came from.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="How do I connect a signal in code?" description="The connect() call, lambdas, and passing extra arguments." href="/signals/connect-signal-in-code/" />
-	<LinkCard title="Using signals" description="Official step-by-step guide to signals." href="https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html" />
-</CardGrid>

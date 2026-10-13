@@ -6,7 +6,7 @@ sidebar:
   label: Nonexistent function
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -134,10 +134,3 @@ var player: Player = $Player
 ## Still stuck?
 
 The error names the base node's **class**, not its name. If it says `in base 'Node2D'`, work out which `Node2D` that is: put `print(body.name)` or `print(body.get_path())` on the line above the call and run again. Once you know which node it is, the fix is usually obvious.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="Why is my node null?" description="The other half of this problem: the node wasn't found at all." href="/errors/node-is-null/" />
-	<LinkCard title="Object.has_method()" description="Official reference for checking a function exists before calling it." href="https://docs.godotengine.org/en/stable/classes/class_object.html#class-object-method-has-method" />
-</CardGrid>

@@ -6,7 +6,7 @@ sidebar:
   label: Connect a signal
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 
 <Aside type="tip" title="Short answer">
@@ -241,10 +241,3 @@ Connecting the same signal to the same function again raises an error; see [Why 
 :::note[Reaching up with get_parent()]
 `get_parent().some_signal.connect(...)` or `get_parent().do_something()` ties the child to one specific parent, so it breaks as soon as you reuse the scene. Emit a signal from the child and let the parent connect.
 :::
-
-## Related
-
-<CardGrid>
-	<LinkCard title="Why does it say the signal is already connected?" description="Fix the error from connecting the same signal twice." href="/errors/signal-already-connected/" />
-	<LinkCard title="Using signals" description="Official step-by-step introduction to signals." href="https://docs.godotengine.org/en/stable/getting_started/step_by_step/signals.html" />
-</CardGrid>

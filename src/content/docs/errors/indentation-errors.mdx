@@ -6,7 +6,7 @@ sidebar:
   label: Indentation errors
 ---
 
-import { Aside, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside } from '@astrojs/starlight/components';
 import GodotError from '../../../components/GodotError.astro';
 
 <Aside type="tip" title="Short answer">
@@ -95,9 +95,3 @@ move_and_slide()
 ## Still stuck?
 
 The error names the line. Click it in the **Debugger** to jump straight there, turn on **Show Whitespace**, and compare the leading characters on that line with the line above. They should be the same symbols, the same number of times, unless the line above ends with a colon, in which case this line needs exactly one more tab.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="GDScript style guide: indentation" description="Official docs on tabs, blocks and line continuation." href="https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html#indentation" />
-</CardGrid>

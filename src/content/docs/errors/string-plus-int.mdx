@@ -6,7 +6,7 @@ sidebar:
   label: String + int
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -113,9 +113,3 @@ score_label.text = "Score: {0}".format([score])
 ## Still stuck?
 
 Hover the variable in the script editor to see its type, or drop `print(typeof(score))` on the line above the failing one and run again. `4` means String, `2` means int, `3` means float. Whatever isn't a String needs `str()` before it meets one. If the variable has no type, give it one (`var score := 0` or `var score: int = 0`) so the editor can warn you before you run.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="GDScript format strings" description="Official docs on the % operator and format()." href="https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_format_string.html" />
-</CardGrid>

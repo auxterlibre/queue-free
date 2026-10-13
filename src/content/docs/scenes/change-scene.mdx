@@ -6,7 +6,7 @@ sidebar:
   label: Change scene
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
 <Aside type="tip" title="Short answer">
 Call `get_tree().change_scene_to_file("res://level_2.tscn")`. The current scene is freed and the new one takes its place.
@@ -82,10 +82,3 @@ After the change, every node of the previous scene is freed. A variable still po
 :::note[Changing to the same scene to restart]
 If you only want to restart the current level, call `get_tree().reload_current_scene()`. It does the same thing without you needing to know the path.
 :::
-
-## Related
-
-<CardGrid>
-	<LinkCard title="How do I spawn a scene from code?" description="Instantiate a scene and add it to the running game." href="/scenes/instantiate-scene/" />
-	<LinkCard title="SceneTree.change_scene_to_file" description="Official class reference." href="https://docs.godotengine.org/en/stable/classes/class_scenetree.html#class-scenetree-method-change-scene-to-file" />
-</CardGrid>

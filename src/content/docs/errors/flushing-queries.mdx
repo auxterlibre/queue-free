@@ -6,7 +6,7 @@ sidebar:
   label: Flushing queries
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -129,10 +129,3 @@ Changing scene frees the whole current scene, collision objects included, so fro
 ## Still stuck?
 
 Click the error in the **Debugger** panel and read the stack trace. The physics callback, `_on_body_entered` or `_on_area_entered`, sits at the top, and every line below it ran as part of that callback. Anything in that chain that disables a shape, frees a body or area, or toggles monitoring needs to go through `set_deferred()` or `call_deferred()`, even if it lives in another function or another node.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="Object.call_deferred()" description="Official reference for call_deferred and set_deferred." href="https://docs.godotengine.org/en/stable/classes/class_object.html#class-object-method-call-deferred" />
-	<LinkCard title='Why do I get "previously freed instance"?' description="What goes wrong when something uses a node after it has been freed." href="/errors/previously-freed-instance/" />
-</CardGrid>

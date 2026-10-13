@@ -29,12 +29,6 @@ export type Block =
 
 export type BlockType = Block['type'];
 
-export interface RelatedLink {
-	title: string;
-	description: string;
-	href: string;
-}
-
 export interface Page {
 	kind: PageKind;
 	category: string;
@@ -45,7 +39,6 @@ export interface Page {
 	slug: string;
 	shortAnswer: string;
 	blocks: Block[];
-	related: RelatedLink[];
 }
 
 export interface Submission {
@@ -62,7 +55,6 @@ export interface Issue {
 
 export const LIMITS = {
 	blocks: 40,
-	related: 8,
 	steps: 12,
 	causes: 8,
 	title: 120,
@@ -290,26 +282,6 @@ export function validatePage(value: unknown, known: Categories): Issue[] {
 	} else {
 		const headings = headingTexts(p.blocks);
 		p.blocks.forEach((b, i) => checkBlock(issues, `blocks.${i}`, b, headings));
-	}
-
-	if (!Array.isArray(p.related)) {
-		issues.push({ path: 'related', message: 'Missing.' });
-	} else if (p.related.length > LIMITS.related) {
-		issues.push({ path: 'related', message: `Too many links (max ${LIMITS.related}).` });
-	} else {
-		p.related.forEach((r, i) => {
-			const path = `related.${i}`;
-			if (!r || typeof r !== 'object') {
-				issues.push({ path, message: 'Missing.' });
-				return;
-			}
-			const link = r as Record<string, unknown>;
-			checkText(issues, `${path}.title`, link.title, LIMITS.title);
-			checkText(issues, `${path}.description`, link.description, LIMITS.description);
-			if (typeof link.href !== 'string' || !/^(\/[^\s]*|https:\/\/[^\s]+)$/.test(link.href)) {
-				issues.push({ path: `${path}.href`, message: 'Use a site path like "/signals/connect-signal-in-code/" or an https:// link.' });
-			}
-		});
 	}
 
 	return issues;

@@ -16,11 +16,6 @@ function templateLiteral(text: string): string {
 	return '`' + text.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${') + '`';
 }
 
-// For a JSX attribute: title={"..."} is safe for any string, unlike title="...".
-function attr(name: string, value: string): string {
-	return `${name}={${JSON.stringify(value)}}`;
-}
-
 function yamlString(value: string): string {
 	return JSON.stringify(value);
 }
@@ -104,7 +99,6 @@ export function generateMdx(page: Page): string {
 	const starlight = ['Aside'];
 	if (used.has('steps')) starlight.push('Steps');
 	if (used.has('tabs')) starlight.push('Tabs', 'TabItem');
-	if (page.related.length) starlight.push('LinkCard', 'CardGrid');
 
 	const imports = [`import { ${starlight.join(', ')} } from '@astrojs/starlight/components';`];
 	if (used.has('tree')) imports.push(`import SceneTree from '../../../components/SceneTree.astro';`);
@@ -126,13 +120,6 @@ export function generateMdx(page: Page): string {
 		`<Aside type="tip" title="Short answer">\n${escapeProse(page.shortAnswer)}\n</Aside>`,
 		...page.blocks.map(renderBlock),
 	];
-
-	if (page.related.length) {
-		const cards = page.related.map(
-			(r) => `\t<LinkCard ${attr('title', r.title.trim())} ${attr('description', r.description.trim())} ${attr('href', r.href.trim())} />`,
-		);
-		parts.push(`## Related`, `<CardGrid>\n${cards.join('\n')}\n</CardGrid>`);
-	}
 
 	return parts.join('\n\n') + '\n';
 }

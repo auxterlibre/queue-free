@@ -6,7 +6,7 @@ sidebar:
   label: My node is null
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -181,11 +181,3 @@ func _ready() -> void:
 The end of the error tells you where Godot started looking: `(relative to "/root/Main")`. Run the game, then click **Remote** at the top of the **Scene** dock. That shows the tree as it really is while the game runs, so you can find your node and compare its actual name and path with what your code says.
 
 If it's still not obvious, add `print_tree_pretty()` to `_ready()` and read the tree in the Output panel.
-
-## Related
-
-<CardGrid>
-	<LinkCard title='Why do I get "Nonexistent function"?' description="The node was found, but it doesn't have the function you called." href="/errors/nonexistent-function/" />
-	<LinkCard title="Nodes and scene instances" description="Official docs on get_node and paths." href="https://docs.godotengine.org/en/stable/tutorials/scripting/nodes_and_scene_instances.html" />
-	<LinkCard title="Scene unique nodes" description="Official docs on % unique names." href="https://docs.godotengine.org/en/stable/tutorials/scripting/scene_unique_nodes.html" />
-</CardGrid>

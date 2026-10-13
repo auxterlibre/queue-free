@@ -222,7 +222,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				slug: '',
 				shortAnswer: '',
 				blocks: templateBlocks(kind),
-				related: [],
 			},
 			contributor: '',
 			notes: '',
@@ -537,22 +536,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			${(Object.keys(BLOCK_NAMES) as BlockType[]).map((t) => `<button type="button" class="small" data-action="add-block" data-type="${t}">${BLOCK_NAMES[t]}</button>`).join('')}
 		</div>
 
-		<h2>Related pages</h2>
-		<div class="links">
-			${page.related
-				.map(
-					(r, i) => `<div class="block">
-					<div class="block-head"><span class="block-name">Link ${i + 1}</span><span class="block-tools"><button type="button" class="small" data-action="remove-link" data-index="${i}">Remove</button></span></div>
-					${field('Title', `page.related.${i}.title`, input(`page.related.${i}.title`, r.title))}
-					${field('What it covers', `page.related.${i}.description`, input(`page.related.${i}.description`, r.description))}
-					${field('Link', `page.related.${i}.href`, input(`page.related.${i}.href`, r.href, 'placeholder="/signals/connect-signal-in-code/"'))}
-				</div>`,
-				)
-				.join('')}
-		</div>
-		<span class="error" data-error-for="page.related"></span>
-		<button type="button" class="small" data-action="add-link">Add a link</button>
-
 		<h2>About you</h2>
 		${renderGithubCard()}
 		${field('Name or handle (optional)', 'contributor', input('contributor', draft.contributor), 'Shown on the pull request, not on the page.')}
@@ -714,13 +697,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			aside('tip', 'Short answer', paragraphs(page.shortAnswer)),
 			...page.blocks.map((b) => previewBlock(b, anchors)),
 		];
-		if (page.related.length) {
-			parts.push(
-				`<h2>Related</h2><div class="qf-cards">${page.related
-					.map((r) => `<a class="card" href="${esc(r.href)}"><span class="title">${esc(r.title)}</span><span class="desc">${esc(r.description)}</span></a>`)
-					.join('')}</div>`,
-			);
-		}
 		return parts.join('');
 	}
 
@@ -1252,12 +1228,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				case 'remove-cause':
 					(blocks[i] as { rows: { symptom: string; section: string }[] }).rows.splice(Number(item), 1);
 					break;
-				case 'add-link':
-					draft.page.related.push({ title: '', description: '', href: '' });
-					break;
-				case 'remove-link':
-					draft.page.related.splice(i, 1);
-					break;
 				case 'copy-source':
 					navigator.clipboard?.writeText(sourceEl.textContent ?? '');
 					return;
@@ -1641,11 +1611,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		flex-wrap: wrap;
 		gap: 0.5rem;
 		align-items: center;
-	}
-	.qf-contribute .links {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
 	}
 
 	/* GitHub sign-in card */
@@ -2074,26 +2039,5 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .qf-steps li + li {
 		margin-top: 0.75rem;
-	}
-	.qf-contribute .qf-cards {
-		display: grid;
-		gap: 1rem;
-	}
-	.qf-contribute .qf-cards .card {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding: 1rem;
-		border: 1px solid var(--qf-line);
-		border-radius: 0.5rem;
-		text-decoration: none;
-		color: var(--qf-text);
-	}
-	.qf-contribute .qf-cards .title {
-		font-weight: 600;
-	}
-	.qf-contribute .qf-cards .desc {
-		color: var(--qf-muted);
-		font-size: var(--sl-text-sm);
 	}
 </style>

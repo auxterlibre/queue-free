@@ -6,7 +6,7 @@ sidebar:
   label: Spawn a scene
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 
 <Aside type="tip" title="Short answer">
@@ -114,10 +114,3 @@ Anything in the enemy script that relies on `@onready` is still `null` until the
 :::note[Calling instantiate on the path]
 `"res://enemy.tscn".instantiate()` fails, because a string isn't a scene. Call `instantiate()` on the `PackedScene` you got from `preload()` or `load()`.
 :::
-
-## Related
-
-<CardGrid>
-	<LinkCard title="How do I change scenes?" description="Replace the whole current scene with another one." href="/scenes/change-scene/" />
-	<LinkCard title="Nodes and scene instances" description="Official docs on instantiating scenes from code." href="https://docs.godotengine.org/en/stable/tutorials/scripting/nodes_and_scene_instances.html" />
-</CardGrid>

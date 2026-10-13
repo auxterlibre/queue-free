@@ -6,7 +6,7 @@ sidebar:
   label: Previously freed
 ---
 
-import { Aside, Tabs, TabItem, LinkCard, CardGrid } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 import SceneTree from '../../../components/SceneTree.astro';
 import GodotError from '../../../components/GodotError.astro';
 
@@ -167,10 +167,3 @@ enemy.queue_free()
 ## Still stuck?
 
 The error names the function that was called on the dead node, so you know what the node was. Search your scripts for every variable, Array and Dictionary that stores it, and look for the one that outlives the node. When you test for it, use `is_instance_valid(node)` rather than `node == null`. A freed reference is not `null`, it is a dead object, and only `is_instance_valid()` tells the two apart.
-
-## Related
-
-<CardGrid>
-	<LinkCard title="Why is my node null?" description="The node was never found in the first place." href="/errors/node-is-null/" />
-	<LinkCard title="Node.queue_free()" description="Official reference for queue_free and when the node actually goes away." href="https://docs.godotengine.org/en/stable/classes/class_node.html#class-node-method-queue-free" />
-</CardGrid>
