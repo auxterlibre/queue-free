@@ -1787,9 +1787,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		width: 28px;
 		height: 28px;
 		padding: 0;
-		border: 1px solid currentColor;
+		border: 0;
 		border-radius: 50%;
-		background: none;
+		background: color-mix(in srgb, var(--qf-text) 10%, transparent);
 		color: var(--qf-text);
 	}
 	/* Icons live in public/ and paint with currentColor through a mask. */
@@ -1797,7 +1797,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		content: '';
 		width: 28px;
 		height: 28px;
-		margin: -1px;
 		background: currentColor;
 		mask: var(--icon) center / 28px no-repeat;
 	}
@@ -1810,17 +1809,19 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute button.icon[data-icon='remove'] {
 		--icon: url('/icon_remove.svg');
 	}
-	.qf-contribute button.icon:hover:not(:disabled),
+	.qf-contribute button.icon:hover:not(:disabled) {
+		color: #e3e3e3;
+	}
+	.qf-contribute button.icon:active:not(:disabled) {
+		color: var(--qf-muted);
+	}
 	.qf-contribute button.icon:focus-visible {
+		outline: none;
+		background: color-mix(in srgb, var(--qf-accent) 10%, transparent);
 		color: var(--qf-accent);
 	}
-	.qf-contribute button.icon:focus-visible {
-		outline: 2px solid var(--qf-accent);
-		outline-offset: 1px;
-	}
 	.qf-contribute button.icon:disabled {
-		color: var(--qf-muted);
-		opacity: 0.6;
+		opacity: 0.2;
 	}
 	.qf-contribute .sub {
 		display: flex;
