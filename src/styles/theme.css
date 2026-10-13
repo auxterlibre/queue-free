@@ -257,6 +257,27 @@ html:not([data-has-sidebar]) .sl-container {
 	color: var(--qf-link);
 }
 
+/* Code tabs follow the header tabs: muted, blue on hover, text color when selected. */
+.sl-markdown-content [role='tablist'] {
+	border-bottom-color: transparent;
+}
+
+.sl-markdown-content [role='tab'] {
+	--sl-tab-color-border: transparent;
+	color: var(--qf-muted);
+	font-weight: 700;
+}
+
+.sl-markdown-content [role='tab']:hover,
+.sl-markdown-content [role='tab']:focus-visible {
+	color: var(--qf-link);
+}
+
+.sl-markdown-content [role='tab'][aria-selected='true'] {
+	--sl-tab-color-border: var(--qf-text);
+	color: var(--qf-text);
+}
+
 .sl-markdown-content code:not(pre code) {
 	background: none;
 	border: none;
