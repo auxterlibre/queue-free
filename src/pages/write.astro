@@ -140,7 +140,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	const BLOCK_HELP: Partial<Record<BlockType, string>> = {
 		tree: 'Use + to add a child node, rename it, and mark the node that holds the script.',
-		code: 'Tab indents and Shift+Tab outdents. Line numbers like 2 or 1-3 mark lines as wrong or right.',
 	};
 
 
@@ -188,7 +187,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				newBlock('tree'),
 				{ type: 'heading', text: 'First cause' },
 				{ type: 'prose', text: '' },
-				{ type: 'code', lang: 'gdscript', filename: 'main.gd', code: '', wrong: '1', right: '2' },
+				{ type: 'code', lang: 'gdscript', filename: 'main.gd', code: '', wrong: '', right: '' },
 				{ type: 'heading', text: 'Second cause' },
 				{ type: 'prose', text: '' },
 				{ type: 'heading', text: 'Still stuck?' },
@@ -385,9 +384,52 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	const textarea = (path: string, value: string, rows: number, attrs = '') =>
 		`<textarea data-path="${path}" rows="${rows}" ${attrs}>${esc(value)}</textarea>`;
 
-	const codeArea = (path: string, value: string, rows: number, lang: string, wrong = '', right = '') =>
-		`<div class="code-editor"><pre class="code-highlight" aria-hidden="true"><code>${plainLines(value)}</code></pre>` +
-		`<textarea data-path="${path}" rows="${rows}" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" data-lang="${lang}" data-wrong="${esc(wrong)}" data-right="${esc(right)}">${esc(value)}</textarea></div>`;
+	// Marks are stored as a line spec like "2" or "1-3,5"; the editor toggles them per line.
+	function lineSpec(lines: Set<number>): string {
+		const sorted = [...lines].sort((a, b) => a - b);
+		const parts: string[] = [];
+		for (let k = 0; k < sorted.length; k++) {
+			const from = sorted[k]!;
+			let to = from;
+			while (k + 1 < sorted.length && sorted[k + 1] === to + 1) to = sorted[++k]!;
+			parts.push(from === to ? `${from}` : `${from}-${to}`);
+		}
+		return parts.join(',');
+	}
+
+	const MARK_ICONS = {
+		right: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M4.5 10.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+		wrong: '<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><path d="M5.5 5.5l9 9m0-9l-9 9" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/></svg>',
+	};
+
+	function lineMarks(block: number, code: string, wrong: string, right: string): string {
+		const del = lineSet(wrong);
+		const ins = lineSet(right);
+		const count = code.split('\n').length;
+		let html = '';
+		for (let n = 1; n <= count; n++) {
+			const toggle = (mark: 'right' | 'wrong', on: boolean, title: string) =>
+				`<button type="button" class="line-mark-${mark}" data-action="mark-line" data-index="${block}" data-line="${n}" data-mark="${mark}" aria-pressed="${on}" title="${title}" aria-label="Line ${n}: ${title}" tabindex="-1">${MARK_ICONS[mark]}</button>`;
+			html += `<span class="line-mark">${toggle('right', ins.has(n), 'Mark as correct')}${toggle('wrong', del.has(n), 'Mark as wrong')}</span>`;
+		}
+		return html;
+	}
+
+	const codeArea = (path: string, value: string, rows: number, lang: string, wrong = '', right = '', markBlock = -1) =>
+		`<div class="code-editor${markBlock >= 0 ? ' with-marks' : ''}"><pre class="code-highlight" aria-hidden="true"><code>${plainLines(value)}</code></pre>` +
+		`<textarea data-path="${path}" rows="${rows}" class="code" spellcheck="false" autocapitalize="off" autocomplete="off" data-lang="${lang}" data-wrong="${esc(wrong)}" data-right="${esc(right)}">${esc(value)}</textarea>` +
+		(markBlock >= 0 ? `<div class="line-marks" data-marks-for="${markBlock}">${lineMarks(markBlock, value, wrong, right)}</div>` : '') +
+		`</div>`;
+
+	const langSwitch = (block: number, lang: string) =>
+		`<div class="switch" role="radiogroup" aria-label="Language">` +
+		(['gdscript', 'csharp'] as const)
+			.map((l) => `<button type="button" role="radio" data-action="set-lang" data-index="${block}" data-lang="${l}" aria-checked="${lang === l}">${l === 'gdscript' ? 'GDScript' : 'C#'}</button>`)
+			.join('') +
+		`</div>`;
+
+	const group = (label: string, path: string, control: string) =>
+		`<div class="field"><span class="label">${esc(label)}</span>${control}<span class="error" data-error-for="${path}"></span></div>`;
 
 	const select = (path: string, value: string, options: [string, string][]) =>
 		`<select data-path="${path}">${options
@@ -417,14 +459,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'code':
 				body =
 					`<div class="row">` +
-					field('Language', `${p}.lang`, select(`${p}.lang`, block.lang, [['gdscript', 'GDScript'], ['csharp', 'C#'], ['txt', 'Plain text']])) +
+					group('Language', `${p}.lang`, langSwitch(i, block.lang)) +
 					field('File name', `${p}.filename`, input(`${p}.filename`, block.filename)) +
 					`</div>` +
-					field('Code', `${p}.code`, codeArea(`${p}.code`, block.code, 8, block.lang, block.wrong, block.right)) +
-					`<div class="row">` +
-					field('Mark as wrong (lines)', `${p}.wrong`, input(`${p}.wrong`, block.wrong, 'placeholder="1"')) +
-					field('Mark as right (lines)', `${p}.right`, input(`${p}.right`, block.right, 'placeholder="2"')) +
-					`</div>`;
+					field('Code', `${p}.code`, codeArea(`${p}.code`, block.code, 8, block.lang, block.wrong, block.right, i)) +
+					`<span class="error" data-error-for="${p}.wrong"></span><span class="error" data-error-for="${p}.right"></span>`;
 				break;
 			case 'tabs':
 				body =
@@ -719,6 +758,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			const lang = (el.dataset.lang ?? 'txt') as 'gdscript' | 'csharp' | 'txt';
 			const opts = { del: lineSet(el.dataset.wrong ?? ''), ins: lineSet(el.dataset.right ?? '') };
 			layer.innerHTML = highlighter ? highlighter.lines(el.value, lang, opts) : plainLines(el.value, opts);
+			const marks = el.parentElement?.querySelector<HTMLElement>('.line-marks');
+			if (marks) marks.innerHTML = lineMarks(Number(marks.dataset.marksFor), el.value, el.dataset.wrong ?? '', el.dataset.right ?? '');
 		};
 
 		const scheduleHighlight = (el: HTMLTextAreaElement) => {
@@ -781,6 +822,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 					layer.scrollTop = el.scrollTop;
 					layer.scrollLeft = el.scrollLeft;
 				}
+				const marks = el.parentElement?.querySelector<HTMLElement>('.line-marks');
+				if (marks) marks.style.transform = `translateY(${-el.scrollTop}px)`;
 			},
 			true,
 		);
@@ -1014,13 +1057,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			setPath(draft, path, el.value);
 			if (renamedHeading !== null) syncSectionPicks(renamedHeading.trim(), el.value.trim());
 			if (el instanceof HTMLTextAreaElement && el.classList.contains('code')) scheduleHighlight(el);
-			if (path.endsWith('.wrong') || path.endsWith('.right')) {
-				const code = el.closest('.block')?.querySelector<HTMLTextAreaElement>('textarea.code');
-				if (code) {
-					code.dataset[path.endsWith('.wrong') ? 'wrong' : 'right'] = el.value;
-					scheduleHighlight(code);
-				}
-			}
 			const setField = (field: 'label' | 'slug', value: string) => {
 				draft.page[field] = value;
 				formEl.querySelector<HTMLInputElement>(`[data-path="page.${field}"]`)!.value = value;
@@ -1048,8 +1084,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		const codeIndent = (el: HTMLTextAreaElement): string => {
 			const path = el.dataset.path ?? '';
 			if (path.includes('.csharp.')) return '    ';
-			const lang = el.closest('.block')?.querySelector<HTMLSelectElement>('select[data-path$=".lang"]')?.value;
-			return lang === 'csharp' ? '    ' : '\t';
+			return el.dataset.lang === 'csharp' ? '    ' : '\t';
 		};
 
 		const replaceSelection = (el: HTMLTextAreaElement, text: string, start: number, end: number, selectAfter?: [number, number]) => {
@@ -1109,14 +1144,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		root.addEventListener('change', (e) => {
 			const el = e.target as HTMLSelectElement;
-			if (el.matches('select[data-path$=".lang"]')) {
-				const code = el.closest('.block')?.querySelector<HTMLTextAreaElement>('textarea.code');
-				if (code) {
-					code.dataset.lang = el.value;
-					highlightField(code);
-				}
-				return;
-			}
 			if (!el.matches('[data-pick-category]')) return;
 			draft.newCategory = el.value === '__new__';
 			draft.page.category = draft.newCategory ? '' : el.value;
@@ -1130,10 +1157,45 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		root.addEventListener('click', (e) => {
 			const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-action]');
 			if (!btn) return;
-			const { action, index, type, dir, item, mode, value, treePath, field: flag, parent } = btn.dataset;
+			const { action, index, type, dir, item, mode, value, treePath, field: flag, parent, lang, line, mark } = btn.dataset;
 			const i = Number(index);
 			const blocks = draft.page.blocks;
+			const codeBlockEditor = () => formEl.querySelector<HTMLTextAreaElement>(`[data-path="page.blocks.${i}.code"]`);
 			switch (action) {
+				case 'set-lang': {
+					const block = blocks[i] as { lang: string };
+					block.lang = lang!;
+					for (const b of btn.parentElement!.children) b.setAttribute('aria-checked', String(b === btn));
+					const code = codeBlockEditor();
+					if (code) {
+						code.dataset.lang = lang!;
+						highlightField(code);
+					}
+					save();
+					scheduleOutputs();
+					return;
+				}
+				case 'mark-line': {
+					const block = blocks[i] as { wrong: string; right: string };
+					const n = Number(line);
+					const key = mark as 'wrong' | 'right';
+					const other = key === 'wrong' ? 'right' : 'wrong';
+					const set = lineSet(block[key]);
+					const otherSet = lineSet(block[other]);
+					set.has(n) ? set.delete(n) : set.add(n);
+					otherSet.delete(n);
+					block[key] = lineSpec(set);
+					block[other] = lineSpec(otherSet);
+					const code = codeBlockEditor();
+					if (code) {
+						code.dataset.wrong = block.wrong;
+						code.dataset.right = block.right;
+						highlightField(code);
+					}
+					save();
+					scheduleOutputs();
+					return;
+				}
 				case 'github-logout':
 					fetch('/api/github/logout', { method: 'POST' })
 						.catch(() => {})
@@ -1488,6 +1550,83 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .code-editor textarea.code:focus-visible {
 		outline: none;
+	}
+	.qf-contribute .code-editor.with-marks pre,
+	.qf-contribute .code-editor.with-marks textarea.code {
+		padding-right: 3.5rem;
+	}
+	.qf-contribute .line-marks {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		pointer-events: none;
+	}
+	.qf-contribute .line-mark {
+		display: flex;
+		gap: 1px;
+		height: 1.5rem;
+		align-items: center;
+		pointer-events: auto;
+	}
+	.qf-contribute .line-mark button {
+		display: inline-flex;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 0;
+		border-radius: 4px;
+		background: none;
+		color: var(--qf-code-dim, var(--qf-muted));
+		opacity: 0.6;
+	}
+	.qf-contribute .line-mark button:hover {
+		opacity: 1;
+		background: color-mix(in srgb, var(--qf-code-default) 12%, transparent);
+	}
+	.qf-contribute .line-mark button:focus-visible {
+		outline: 2px solid var(--qf-accent);
+		outline-offset: -1px;
+	}
+	.qf-contribute .line-mark-right[aria-pressed='true'] {
+		opacity: 1;
+		color: #63c259;
+	}
+	.qf-contribute .line-mark-wrong[aria-pressed='true'] {
+		opacity: 1;
+		color: var(--qf-code-error);
+	}
+
+	/* Segmented switch, used for the code language */
+	.qf-contribute .switch {
+		display: flex;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		border: 1px solid var(--qf-field-line);
+		border-radius: 0.5rem;
+		background: var(--qf-field-bg);
+	}
+	.qf-contribute .switch button {
+		flex: 1;
+		padding: 0.25rem 0.5rem;
+		border: 0;
+		border-radius: 0.25rem;
+		background: none;
+		color: var(--qf-muted);
+		line-height: 1.5rem;
+	}
+	.qf-contribute .switch button:hover,
+	.qf-contribute .switch button:focus-visible {
+		color: var(--qf-text);
+	}
+	.qf-contribute .switch button:focus-visible {
+		outline: 2px solid var(--qf-accent);
+		outline-offset: -2px;
+	}
+	.qf-contribute .switch button[aria-checked='true'] {
+		background: color-mix(in srgb, var(--qf-muted) 50%, transparent);
+		color: var(--qf-text);
 	}
 	.qf-contribute .code-editor textarea.code::selection {
 		background: color-mix(in srgb, var(--qf-accent) 35%, transparent);
