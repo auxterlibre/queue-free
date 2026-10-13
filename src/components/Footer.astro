@@ -7,16 +7,37 @@ import { KOFI_NAME } from '../site.ts';
 
 <script is:inline src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>
 <script is:inline define:vars={{ KOFI_NAME }}>
-	// The ClientRouter swaps the body on navigation, which drops the widget
-	// Ko-fi injected, so redraw it on every page load.
-	document.addEventListener('astro:page-load', () => {
+	// The ClientRouter swaps <body> on navigation, which drops the widget
+	// Ko-fi appended, and Ko-fi's draw() only works once per page session.
+	// So draw once, remember every node it added, and move those nodes into
+	// the new <body>/<head> after each swap.
+	let widgetNodes = [];
+
+	function drawWidget() {
 		if (typeof kofiWidgetOverlay === 'undefined') return;
-		if (document.querySelector('.floatingchat-container-wrap')) return;
+		if (widgetNodes.length && widgetNodes.every(({ node }) => node.isConnected)) return;
+		const before = new Set([...document.head.children, ...document.body.children]);
 		kofiWidgetOverlay.draw(KOFI_NAME, {
 			'type': 'floating-chat',
 			'floating-chat.donateButton.text': 'Support Me',
 			'floating-chat.donateButton.background-color': '#5bc0de',
 			'floating-chat.donateButton.text-color': '#323842',
 		});
+		widgetNodes = [
+			...[...document.head.children].filter((node) => !before.has(node)).map((node) => ({ node, inHead: true })),
+			...[...document.body.children].filter((node) => !before.has(node)).map((node) => ({ node, inHead: false })),
+		];
+	}
+
+	document.addEventListener('astro:page-load', drawWidget);
+
+	document.addEventListener('astro:before-swap', (event) => {
+		const swap = event.swap;
+		event.swap = () => {
+			swap();
+			for (const { node, inHead } of widgetNodes) {
+				(inHead ? document.head : document.body).appendChild(node);
+			}
+		};
 	});
 </script>
