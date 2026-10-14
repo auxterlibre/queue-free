@@ -78,9 +78,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 <script>
 	import { plainLines } from '../lib/contribute/code-lines.ts';
+	import { SCENE_TREE_LINE, parseSceneTree, renderSceneTree, type SceneNode } from '../lib/scene-tree.ts';
 	import type { CodeThemes, Highlighter } from '../lib/contribute/highlight.ts';
 	import {
+		CODE_EXT,
 		LIMITS,
+		codeFilename,
 		headingAnchor,
 		headingTexts,
 		labelFromTitle,
@@ -89,6 +92,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		type Block,
 		type BlockType,
 		type Categories,
+		type CodeSnippet,
+		type CodeTab,
 		type Issue,
 		type Page,
 		type PageKind,
@@ -122,7 +127,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		heading: 'Section heading',
 		prose: 'Plain text',
 		code: 'Code',
-		tabs: 'Code blocks',
 		tree: 'Scene tree',
 		callout: 'Callout',
 		error: 'Error message',
@@ -138,6 +142,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	const esc = (s: string) =>
 		s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
+	const emptySnippet = (): CodeSnippet => ({ code: '', wrong: '', right: '' });
+	const newCode = (): Block => ({ type: 'code', lang: 'gdscript', name: 'main', gdscript: emptySnippet(), csharp: emptySnippet() });
+
 	function newBlock(type: BlockType): Block {
 		switch (type) {
 			case 'heading':
@@ -145,9 +152,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'prose':
 				return { type, text: '' };
 			case 'code':
-				return { type, lang: 'gdscript', filename: 'main.gd', code: '', wrong: '', right: '' };
-			case 'tabs':
-				return { type, gdscript: { filename: 'main.gd', code: '' }, csharp: { filename: 'Main.cs', code: '' } };
+				return newCode();
 			case 'tree':
 				return { type, text: 'Main: Node2D [script]\n  Child: Sprite2D' };
 			case 'callout':
@@ -179,7 +184,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				newBlock('tree'),
 				{ type: 'heading', text: 'First cause' },
 				{ type: 'prose', text: '' },
-				{ type: 'code', lang: 'gdscript', filename: 'main.gd', code: '', wrong: '', right: '' },
+				newCode(),
 				{ type: 'heading', text: 'Second cause' },
 				{ type: 'prose', text: '' },
 				{ type: 'heading', text: 'Still stuck?' },
@@ -191,7 +196,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			newBlock('tree'),
 			{ type: 'steps', items: [''] },
 			{ type: 'heading', text: 'Add the script' },
-			newBlock('tabs'),
+			newCode(),
 			{ type: 'prose', text: '' },
 			{ type: 'heading', text: 'Common mistakes' },
 			{ type: 'callout', kind: 'note', title: '', text: '' },
@@ -226,6 +231,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			const raw = localStorage.getItem(DRAFT_KEY);
 			if (raw) {
 				const d = JSON.parse(raw) as Draft;
+				if (d?.page?.blocks?.some((b) => b.type === 'code' && !b.gdscript)) return newDraft(known);
 				if (d?.page?.blocks) return { ...newDraft(known), ...d, page: { ...newDraft(known).page, ...d.page } };
 			}
 		} catch {}
@@ -243,46 +249,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		target[last] = value;
 	}
 
-	// Scene tree: the block stores the text form, the editor works on nodes.
-
-	interface TreeNode {
-		name: string;
-		type: string;
-		script: boolean;
-		unique: boolean;
-		note: string;
-		children: TreeNode[];
-	}
-
-	const TREE_LINE = /^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/;
 	const treeTextMode = new Set<number>();
 
-	function parseTree(text: string): TreeNode[] | null {
-		const lines = text.split('\n').filter((l) => l.trim());
-		if (!lines.length) return [];
-		const base = Math.min(...lines.map((l) => l.match(/^\s*/)![0].length));
-		const roots: TreeNode[] = [];
-		const stack: { depth: number; node: TreeNode }[] = [];
-		for (const line of lines) {
-			const m = line.match(TREE_LINE);
-			if (!m) return null;
-			const depth = Math.floor((m[1]!.length - base) / 2);
-			const node: TreeNode = {
-				name: m[2]!,
-				type: m[3] ?? 'Node',
-				script: m[4]!.includes('[script]'),
-				unique: m[4]!.includes('[unique]'),
-				note: m[5] ?? '',
-				children: [],
-			};
-			while (stack.length && stack[stack.length - 1]!.depth >= depth) stack.pop();
-			(stack.length ? stack[stack.length - 1]!.node.children : roots).push(node);
-			stack.push({ depth, node });
-		}
-		return roots;
-	}
-
-	function serializeTree(nodes: TreeNode[], depth = 0): string {
+	function serializeTree(nodes: SceneNode[], depth = 0): string {
 		return nodes
 			.map((n) => {
 				const flags = (n.script ? ' [script]' : '') + (n.unique ? ' [unique]' : '');
@@ -293,14 +262,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			.join('\n');
 	}
 
-	function treeSiblings(roots: TreeNode[], path: string): TreeNode[] {
+	function treeSiblings(roots: SceneNode[], path: string): SceneNode[] {
 		if (!path) return roots;
 		let list = roots;
 		for (const index of path.split('.')) list = list[Number(index)]!.children;
 		return list;
 	}
 
-	function treeNodeAt(roots: TreeNode[], path: string): TreeNode {
+	function treeNodeAt(roots: SceneNode[], path: string): SceneNode {
 		const indexes = path.split('.').map(Number);
 		const last = indexes.pop()!;
 		let list = roots;
@@ -308,7 +277,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		return list[last]!;
 	}
 
-	function uniqueNodeName(siblings: TreeNode[], type: string): string {
+	function uniqueNodeName(siblings: SceneNode[], type: string): string {
 		const taken = new Set(siblings.map((n) => n.name));
 		if (!taken.has(type)) return type;
 		let n = 2;
@@ -318,25 +287,28 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	const icon = (type: string) => `/godot-editor-icons/${esc(type)}.svg`;
 
-	function renderTreeRows(nodes: TreeNode[], block: number, parentPath: string, depth: number): string {
+	function renderTreeRows(nodes: SceneNode[], block: number, parentPath: string, depth: number): string {
 		return nodes
 			.map((n, j) => {
 				const path = parentPath ? `${parentPath}.${j}` : `${j}`;
 				const toggle = (fieldName: 'script' | 'unique', on: boolean, iconName: string, title: string) =>
 					`<button type="button" class="tree-flag" data-action="tree-toggle" data-index="${block}" data-tree-path="${path}" data-field="${fieldName}" aria-pressed="${on}" title="${title}"><img src="${icon(iconName)}" alt="" width="16" height="16"></button>`;
-				const row = `<div class="tree-row">
-					<span class="tree-head" style="--depth: ${depth}">
-						<img class="tree-icon" src="${icon(n.type)}" alt="" width="16" height="16" onerror="this.style.visibility='hidden'">
+				const tool = (action: string, iconName: string, label: string, extra = '') =>
+					`<button type="button" class="icon tiny" data-action="${action}" data-index="${block}" data-tree-path="${path}" data-icon="${iconName}" aria-label="${label}" title="${label}" ${extra}></button>`;
+				const row = `<div class="tree-row" style="--depth: ${depth}">
+					<span class="tree-head" title="${esc(n.type)}">
+						<button type="button" class="tree-retype" data-action="tree-retype" data-index="${block}" data-tree-path="${path}" title="${esc(n.type)} (click to change)"><img class="tree-icon" src="${icon(n.type)}" alt="" width="12" height="12" onerror="this.style.visibility='hidden'"></button>
 						<input type="text" class="tree-name" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="name" value="${esc(n.name)}" aria-label="Node name">
 					</span>
-					<span class="tree-type">${esc(n.type)}</span>
-					<span class="tree-flags">${toggle('script', n.script, 'Script', 'Has a script')}${toggle('unique', n.unique, 'SceneUniqueName', 'Access as unique name (%)')}</span>
-					<input type="text" class="tree-note" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="note" value="${esc(n.note)}" placeholder="Note" aria-label="Note">
+					<span class="tree-meta">
+						<span class="tree-flags">${toggle('script', n.script, 'Script', 'Has a script')}${toggle('unique', n.unique, 'SceneUniqueName', 'Access as unique name (%)')}</span>
+						<input type="text" class="tree-note" data-tree-block="${block}" data-tree-path="${path}" data-tree-field="note" value="${esc(n.note)}" placeholder="Add note" aria-label="Note">
+					</span>
 					<span class="tree-tools">
-						<button type="button" class="small" data-action="tree-add" data-index="${block}" data-parent="${path}" title="Add child node">+</button>
-						<button type="button" class="small" data-action="tree-move" data-index="${block}" data-tree-path="${path}" data-dir="-1" ${j === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
-						<button type="button" class="small" data-action="tree-move" data-index="${block}" data-tree-path="${path}" data-dir="1" ${j === nodes.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
-						<button type="button" class="small" data-action="tree-remove" data-index="${block}" data-tree-path="${path}" aria-label="Remove node">✕</button>
+						${tool('tree-add', 'add', 'Add child node', `data-parent="${path}"`)}
+						${tool('tree-move', 'move_up', 'Move up', `data-dir="-1" ${j === 0 ? 'disabled' : ''}`)}
+						${tool('tree-move', 'move_down', 'Move down', `data-dir="1" ${j === nodes.length - 1 ? 'disabled' : ''}`)}
+						${tool('tree-remove', 'remove', 'Remove node')}
 					</span>
 				</div>`;
 				return row + renderTreeRows(n.children, block, path, depth + 1);
@@ -345,20 +317,20 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 
 	function renderTreeEditor(block: number, text: string): string {
-		const nodes = treeTextMode.has(block) ? null : parseTree(text);
+		const nodes = treeTextMode.has(block) ? null : parseSceneTree(text);
 		if (!nodes) {
 			const note = treeTextMode.has(block) ? '' : `<span class="error">Could not read this tree. Fix it here or clear it.</span>`;
 			return (
 				field('Nodes', `page.blocks.${block}.text`, textarea(`page.blocks.${block}.text`, text, 5, 'class="code" spellcheck="false"'), 'One node per line as Name: Type, children indented by two spaces.') +
 				note +
-				`<div class="tree-foot"><button type="button" class="small" data-action="tree-visual" data-index="${block}">Back to the visual editor</button></div>`
+				`<div class="tree-foot"><button type="button" class="pill" data-action="tree-visual" data-index="${block}">Back to the visual editor</button></div>`
 			);
 		}
 		const body = nodes.length
 			? `<div class="tree-grid">${renderTreeRows(nodes, block, '', 0)}</div>`
-			: `<button type="button" class="small" data-action="tree-add" data-index="${block}" data-parent="">Add root node</button>`;
+			: `<button type="button" class="pill" data-action="tree-add" data-index="${block}" data-parent="">Add root node</button>`;
 		return `<div class="tree-editor">${body}</div>
-			<div class="tree-foot"><button type="button" class="small" data-action="tree-text" data-index="${block}">Edit as text</button></div>
+			<div class="tree-foot"><button type="button" class="pill" data-action="tree-text" data-index="${block}">Edit as text</button></div>
 			<span class="error" data-error-for="page.blocks.${block}.text"></span>`;
 	}
 
@@ -413,10 +385,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		(markBlock >= 0 ? `<div class="line-marks" data-marks-for="${markBlock}">${lineMarks(markBlock, value, wrong, right)}</div>` : '') +
 		`</div>`;
 
-	const langSwitch = (block: number, lang: string) =>
+	let previewLang: CodeTab = 'gdscript';
+
+	const langSwitch = (block: number, lang: string, action = 'set-lang') =>
 		`<div class="switch" role="radiogroup" aria-label="Language">` +
 		(['gdscript', 'csharp'] as const)
-			.map((l) => `<button type="button" role="radio" data-action="set-lang" data-index="${block}" data-lang="${l}" aria-checked="${lang === l}">${l === 'gdscript' ? 'GDScript' : 'C#'}</button>`)
+			.map((l) => `<button type="button" role="radio" data-action="${action}" data-index="${block}" data-lang="${l}" aria-checked="${lang === l}">${l === 'gdscript' ? 'GDScript' : 'C#'}</button>`)
 			.join('') +
 		`</div>`;
 
@@ -427,13 +401,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		`<select data-path="${path}">${options
 			.map(([v, label]) => `<option value="${v}"${v === value ? ' selected' : ''}>${esc(label)}</option>`)
 			.join('')}</select>`;
-
-	function codeFields(path: string, snippet: { filename: string; code: string }, lang: string) {
-		return (
-			field('File name', `${path}.filename`, input(`${path}.filename`, snippet.filename, 'placeholder="main.gd"')) +
-			field(lang, `${path}.code`, codeArea(`${path}.code`, snippet.code, 8, path.includes('.csharp') ? 'csharp' : 'gdscript'))
-		);
-	}
 
 	const sectionPick = (path: string, value: string, headings: string[]) =>
 		select(path, value, [['', 'Pick a section'], ...headings.map((h): [string, string] => [h, h])]).replace('<select ', '<select data-section-pick ');
@@ -452,15 +419,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				body =
 					`<div class="row">` +
 					group('Language', `${p}.lang`, langSwitch(i, block.lang)) +
-					field('File name', `${p}.filename`, input(`${p}.filename`, block.filename)) +
+					field('File name', `${p}.name`, `<span class="slug filename">${input(`${p}.name`, block.name)}<span class="suffix" data-ext-for="${i}">${CODE_EXT[block.lang]}</span></span>`) +
 					`</div>` +
-					field('Code', `${p}.code`, codeArea(`${p}.code`, block.code, 8, block.lang, block.wrong, block.right, i)) +
-					`<span class="error" data-error-for="${p}.wrong"></span><span class="error" data-error-for="${p}.right"></span>`;
-				break;
-			case 'tabs':
-				body =
-					`<div class="sub">${codeFields(`${p}.gdscript`, block.gdscript, 'GDScript')}</div>` +
-					`<div class="sub">${codeFields(`${p}.csharp`, block.csharp, 'C# (optional)')}</div>`;
+					field('Code', `${p}.${block.lang}.code`, codeArea(`${p}.${block.lang}.code`, block[block.lang].code, 8, block.lang, block[block.lang].wrong, block[block.lang].right, i)) +
+					(['gdscript', 'csharp'] as const).map((l) => `<span class="error" data-error-for="${p}.${l}.wrong"></span><span class="error" data-error-for="${p}.${l}.right"></span>`).join('');
 				break;
 			case 'tree':
 				body = renderTreeEditor(i, block.text);
@@ -478,15 +440,15 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				break;
 			case 'steps':
 				body =
-					`<ol class="steps">` +
+					`<div class="steps">` +
 					block.items
 						.map(
 							(item, j) =>
-								`<li>${field(`Step ${j + 1}`, `${p}.items.${j}`, textarea(`${p}.items.${j}`, item, 2))}` +
-								`<button type="button" class="small" data-action="remove-step" data-index="${i}" data-item="${j}">Remove step</button></li>`,
+								`<div class="step">${field(`Step ${j + 1}`, `${p}.items.${j}`, textarea(`${p}.items.${j}`, item, 3))}` +
+								`<button type="button" class="icon" data-action="remove-step" data-index="${i}" data-item="${j}" aria-label="Remove step" title="Remove step" data-icon="remove"></button></div>`,
 						)
 						.join('') +
-					`</ol><button type="button" class="small" data-action="add-step" data-index="${i}">Add a step</button>` +
+					`</div><button type="button" class="pill add-step" data-action="add-step" data-index="${i}" aria-label="Add a step" title="Add a step">+</button>` +
 					`<span class="error" data-error-for="${p}.items"></span>`;
 				break;
 			case 'causes':
@@ -564,8 +526,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		<div class="blocks">${page.blocks.map((b, i) => renderBlock(b, i, page.blocks.length, headingTexts(page.blocks))).join('')}</div>
 		<span class="error" data-error-for="page.blocks"></span>
 		<div class="add-block">
-			<span class="label">Add</span>
-			${(Object.keys(BLOCK_NAMES) as BlockType[]).map((t) => `<button type="button" class="small" data-action="add-block" data-type="${t}">${BLOCK_NAMES[t]}</button>`).join('')}
+			<span class="label">Add new block</span>
+			<div class="add-block-options">${(Object.keys(BLOCK_NAMES) as BlockType[]).map((t) => `<button type="button" class="pill" data-action="add-block" data-type="${t}">${BLOCK_NAMES[t]}</button>`).join('')}</div>
 		</div>
 
 		<h2>About you</h2>
@@ -576,9 +538,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 
 	// Preview rendering
-
-	// Which language the preview's code tabs show, shared by every tab group.
-	let previewLang: 'gdscript' | 'csharp' = 'gdscript';
 
 	// GitHub sign-in, optional: when available, the pull request can be the
 	// contributor's own so they get credit for it.
@@ -640,25 +599,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 
 	function treePreview(text: string): string {
-		const lines = text.split('\n').filter((l) => l.trim());
-		if (!lines.length) return '';
-		const base = Math.min(...lines.map((l) => l.match(/^\s*/)![0].length));
-		let html = '';
-		let depth = -1;
-		for (const line of lines) {
-			const m = line.match(/^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/);
-			if (!m) return `<p class="qf-bad">Can't read the line "${esc(line.trim())}".</p>`;
-			const d = Math.floor((m[1].length - base) / 2);
-			const type = m[3] ?? 'Node';
-			if (d > depth) html += '<ul>'.repeat(d - depth);
-			else {
-				html += '</li>' + '</ul></li>'.repeat(depth - d);
-			}
-			html += `<li><span class="row"><img src="/godot-editor-icons/${esc(type)}.svg" alt="" width="16" height="16" onerror="this.style.visibility='hidden'"><span class="name">${esc(m[2])}</span><span class="type">${esc(type)}</span>${m[4].includes('[script]') ? '<img src="/godot-editor-icons/Script.svg" alt="has script" width="16" height="16">' : ''}${m[5] ? `<span class="note">${esc(m[5])}</span>` : ''}</span>`;
-			depth = d;
-		}
-		html += '</li>' + '</ul></li>'.repeat(depth) + '</ul>';
-		return `<div class="qf-tree">${html}</div>`;
+		const nodes = parseSceneTree(text);
+		if (!nodes) return `<p class="qf-bad">Can't read the line "${esc(text.split('\n').find((l) => l.trim() && !SCENE_TREE_LINE.test(l))!.trim())}".</p>`;
+		return nodes.length ? renderSceneTree(nodes) : '';
 	}
 
 	function aside(kind: string, title: string, inner: string): string {
@@ -687,20 +630,12 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			case 'prose':
 				return paragraphs(block.text);
 			case 'code':
-				return codePreview(block.code, block.lang, block.filename, block.wrong, block.right);
-			case 'tabs':
 				{
-					const hasCsharp = block.csharp.code.trim() !== '';
-					const open = hasCsharp ? previewLang : 'gdscript';
-					const tab = (lang: 'gdscript' | 'csharp', label: string) =>
-						`<button type="button" role="tab" data-action="preview-tab" data-lang="${lang}" aria-selected="${open === lang}">${label}</button>`;
-					const panel = (lang: 'gdscript' | 'csharp', html: string) => `<div role="tabpanel" data-tab-panel="${lang}" ${open === lang ? '' : 'hidden'}>${html}</div>`;
-					return (
-						`<div class="qf-tabs"><div class="tab-bar" role="tablist">${tab('gdscript', 'GDScript')}${hasCsharp ? tab('csharp', 'C#') : ''}</div>` +
-						panel('gdscript', codePreview(block.gdscript.code, 'gdscript', block.gdscript.filename)) +
-						(hasCsharp ? panel('csharp', codePreview(block.csharp.code, 'csharp', block.csharp.filename)) : '') +
-						`</div>`
-					);
+					const filled = (['gdscript', 'csharp'] as const).filter((l) => block[l].code.trim());
+					const shown = filled.length === 2 ? previewLang : (filled[0] ?? 'gdscript');
+					const panel = (l: CodeTab) =>
+						`<div data-tab-panel="${l}" ${shown === l ? '' : 'hidden'}>${codePreview(block[l].code, l, codeFilename(block.name, l), block[l].wrong, block[l].right)}</div>`;
+					return `<div class="code-tabs">${filled.length === 2 ? langSwitch(-1, shown, 'preview-lang') : ''}${panel('gdscript')}${panel('csharp')}</div>`;
 				}
 			case 'tree':
 				return treePreview(block.text);
@@ -822,7 +757,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		const picker = root.querySelector<HTMLDialogElement>('#qf-node-picker')!;
 		const pickerSearch = root.querySelector<HTMLInputElement>('#qf-node-search')!;
 		const pickerList = root.querySelector<HTMLElement>('#qf-node-list')!;
-		let pickerTarget: { block: number; parent: string } | null = null;
+		let pickerTarget: { block: number; parent: string; path?: string } | null = null;
 		const formEl = root.querySelector<HTMLElement>('#qf-form')!;
 		const previewEl = root.querySelector<HTMLElement>('#qf-preview')!;
 		const summaryEl = root.querySelector<HTMLElement>('#qf-summary')!;
@@ -954,8 +889,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		const treeBlock = (index: number) => draft.page.blocks[index] as { type: 'tree'; text: string };
 
-		const editTree = (index: number, edit: (roots: TreeNode[]) => void) => {
-			const roots = parseTree(treeBlock(index).text);
+		const editTree = (index: number, edit: (roots: SceneNode[]) => void) => {
+			const roots = parseSceneTree(treeBlock(index).text);
 			if (!roots) return;
 			edit(roots);
 			treeBlock(index).text = serializeTree(roots);
@@ -979,8 +914,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				: `<p class="hint">No node matches "${esc(pickerSearch.value)}".</p>`;
 		};
 
-		const openPicker = (block: number, parent: string) => {
-			pickerTarget = { block, parent };
+		const openPicker = (block: number, parent: string, path?: string) => {
+			pickerTarget = { block, parent, path };
 			pickerSearch.value = '';
 			renderPicker();
 			picker.showModal();
@@ -989,9 +924,13 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		const pickNode = (type: string) => {
 			if (!pickerTarget) return;
-			const { block, parent } = pickerTarget;
-			let added = '';
+			const { block, parent, path } = pickerTarget;
+			let added = path ?? '';
 			editTree(block, (roots) => {
+				if (path) {
+					treeNodeAt(roots, path).type = type;
+					return;
+				}
 				const siblings = treeSiblings(roots, parent);
 				siblings.push({ name: uniqueNodeName(siblings, type), type, script: false, unique: false, note: '', children: [] });
 				added = parent ? `${parent}.${siblings.length - 1}` : `${siblings.length - 1}`;
@@ -1072,8 +1011,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		let tabLeavesField = false;
 
 		const codeIndent = (el: HTMLTextAreaElement): string => {
-			const path = el.dataset.path ?? '';
-			if (path.includes('.csharp.')) return '    ';
 			return el.dataset.lang === 'csharp' ? '    ' : '\t';
 		};
 
@@ -1150,36 +1087,51 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			const { action, index, type, dir, item, mode, value, treePath, field: flag, parent, lang, line, mark } = btn.dataset;
 			const i = Number(index);
 			const blocks = draft.page.blocks;
-			const codeBlockEditor = () => formEl.querySelector<HTMLTextAreaElement>(`[data-path="page.blocks.${i}.code"]`);
+			const codeBlockEditor = () => formEl.querySelector<HTMLTextAreaElement>(`textarea.code[data-path^="page.blocks.${i}."]`);
 			switch (action) {
 				case 'set-lang': {
-					const block = blocks[i] as { lang: string };
-					block.lang = lang!;
+					const block = blocks[i] as Extract<Block, { type: 'code' }>;
+					block.lang = lang as CodeTab;
 					for (const b of btn.parentElement!.children) b.setAttribute('aria-checked', String(b === btn));
+					formEl.querySelector(`[data-ext-for="${i}"]`)!.textContent = CODE_EXT[block.lang];
 					const code = codeBlockEditor();
 					if (code) {
-						code.dataset.lang = lang!;
+						const snippet = block[block.lang];
+						code.dataset.path = `page.blocks.${i}.${block.lang}.code`;
+						code.dataset.lang = block.lang;
+						code.dataset.wrong = snippet.wrong;
+						code.dataset.right = snippet.right;
+						code.value = snippet.code;
 						highlightField(code);
 					}
 					save();
 					scheduleOutputs();
 					return;
 				}
+				case 'preview-lang': {
+					previewLang = lang as CodeTab;
+					for (const sw of previewEl.querySelectorAll<HTMLElement>('.switch')) {
+						for (const b of sw.children) b.setAttribute('aria-checked', String((b as HTMLElement).dataset.lang === previewLang));
+						for (const panel of sw.parentElement!.querySelectorAll<HTMLElement>('[data-tab-panel]')) panel.hidden = panel.dataset.tabPanel !== previewLang;
+					}
+					return;
+				}
 				case 'mark-line': {
-					const block = blocks[i] as { wrong: string; right: string };
+					const block = blocks[i] as Extract<Block, { type: 'code' }>;
+					const snippet = block[block.lang];
 					const n = Number(line);
 					const key = mark as 'wrong' | 'right';
 					const other = key === 'wrong' ? 'right' : 'wrong';
-					const set = lineSet(block[key]);
-					const otherSet = lineSet(block[other]);
+					const set = lineSet(snippet[key]);
+					const otherSet = lineSet(snippet[other]);
 					set.has(n) ? set.delete(n) : set.add(n);
 					otherSet.delete(n);
-					block[key] = lineSpec(set);
-					block[other] = lineSpec(otherSet);
+					snippet[key] = lineSpec(set);
+					snippet[other] = lineSpec(otherSet);
 					const code = codeBlockEditor();
 					if (code) {
-						code.dataset.wrong = block.wrong;
-						code.dataset.right = block.right;
+						code.dataset.wrong = snippet.wrong;
+						code.dataset.right = snippet.right;
 						highlightField(code);
 					}
 					save();
@@ -1194,16 +1146,11 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 							renderAll();
 						});
 					return;
-				case 'preview-tab': {
-					previewLang = btn.dataset.lang as 'gdscript' | 'csharp';
-					for (const group of previewEl.querySelectorAll<HTMLElement>('.qf-tabs')) {
-						for (const t of group.querySelectorAll<HTMLElement>('[role="tab"]')) t.setAttribute('aria-selected', String(t.dataset.lang === previewLang));
-						for (const panel of group.querySelectorAll<HTMLElement>('[data-tab-panel]')) panel.hidden = panel.dataset.tabPanel !== previewLang;
-					}
-					return;
-				}
 				case 'tree-add':
 					openPicker(i, parent ?? '');
+					return;
+				case 'tree-retype':
+					openPicker(i, '', treePath);
 					return;
 				case 'tree-pick':
 					pickNode(type!);
@@ -1350,6 +1297,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		margin: 0.5rem 0 0;
 		padding: 0;
 	}
+	.qf-contribute h2 {
+		margin-top: 1.5rem;
+	}
 
 	:root[data-theme='light'] .qf-contribute {
 		--qf-field-shadow: inset 0 4px 4px rgb(0 0 0 / 0.12);
@@ -1363,6 +1313,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	html:root:has(.qf-contribute) .content-panel:has(h1#_top) {
 		display: none;
 	}
+	html:root:has(.qf-contribute) .content-panel {
+		border-top: 0;
+	}
 
 	/* Once sent, only the confirmation stays on the page. */
 	.qf-contribute[data-done] .intro,
@@ -1374,6 +1327,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .modes-bar {
 		position: sticky;
 		top: var(--sl-nav-height);
+		margin-top: -1.5rem;
 		z-index: 2;
 		margin-inline: calc(-1 * var(--sl-content-pad-x));
 		padding: 0.5rem var(--sl-content-pad-x);
@@ -1465,17 +1419,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		flex-direction: column;
 		flex: 1;
 		min-width: 0;
-	}
-	.qf-contribute .field > .label {
-		padding-bottom: 0.5rem;
-	}
-	.qf-contribute .field > .label:has(+ .hint) {
-		padding-bottom: 0;
-	}
-	.qf-contribute .field > .hint {
-		padding-bottom: 0.5rem;
+		gap: 0.5rem;
 	}
 	.qf-contribute .label {
+		font-size: var(--sl-text-sm);
 		font-weight: 700;
 		line-height: 1.5rem;
 		color: var(--qf-text);
@@ -1530,14 +1477,14 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .code-editor pre,
 	.qf-contribute .code-editor textarea.code {
 		margin: 0;
-		padding: 0.5rem 1rem;
+		padding: 0.375rem 1rem;
 		border: 0;
 		border-radius: 0.5rem;
 		background: transparent;
 		box-shadow: none;
 		font-family: var(--sl-font-mono);
 		font-size: 0.875rem;
-		line-height: 1.5rem;
+		line-height: 1.75rem;
 		tab-size: 4;
 		white-space: pre;
 	}
@@ -1550,7 +1497,10 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .code-editor pre .ln {
 		display: block;
-		min-height: 1.5rem;
+		min-height: 1.75rem;
+		padding-block: 0.125rem;
+		line-height: 1.5rem;
+		background-clip: content-box;
 	}
 	.qf-contribute .code-editor pre .ln.del {
 		background: rgba(255, 120, 107, 0.1);
@@ -1577,8 +1527,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .line-marks {
 		position: absolute;
-		top: 0.5rem;
-		right: 1.75rem;
+		top: 0.375rem;
+		right: 1rem;
 		display: flex;
 		flex-direction: column;
 		pointer-events: none;
@@ -1586,7 +1536,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute .line-mark {
 		display: flex;
 		gap: 1px;
-		height: 1.5rem;
+		height: 1.75rem;
 		align-items: center;
 		pointer-events: auto;
 	}
@@ -1623,7 +1573,25 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		border-radius: 0.5rem;
 		background: var(--qf-field-bg);
 	}
+	.qf-contribute .switch {
+		position: relative;
+	}
+	.qf-contribute .switch::before {
+		content: '';
+		position: absolute;
+		top: 0.25rem;
+		bottom: 0.25rem;
+		left: 0.25rem;
+		right: calc(50% + 0.125rem);
+		border-radius: 0.25rem;
+		background: color-mix(in srgb, var(--qf-muted) 50%, transparent);
+	}
+	.qf-contribute .switch:has(button:nth-child(2)[aria-checked='true'])::before {
+		left: calc(50% + 0.125rem);
+		right: 0.25rem;
+	}
 	.qf-contribute .switch button {
+		position: relative;
 		flex: 1;
 		padding: 0.25rem 0.5rem;
 		border: 0;
@@ -1632,17 +1600,31 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		color: var(--qf-muted);
 		line-height: 1.5rem;
 	}
-	.qf-contribute .switch button:hover,
-	.qf-contribute .switch button:focus-visible {
-		color: var(--qf-text);
+	.qf-contribute .switch button:hover:not([aria-checked='true']),
+	.qf-contribute .switch button:focus-visible:not([aria-checked='true']) {
+		color: var(--qf-accent);
 	}
 	.qf-contribute .switch button:focus-visible {
 		outline: 2px solid var(--qf-accent);
 		outline-offset: -2px;
 	}
 	.qf-contribute .switch button[aria-checked='true'] {
-		background: color-mix(in srgb, var(--qf-muted) 50%, transparent);
 		color: var(--qf-text);
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.qf-contribute .switch::before {
+			transition:
+				left 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+				right 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.06s;
+		}
+		.qf-contribute .switch:has(button:nth-child(2)[aria-checked='true'])::before {
+			transition:
+				right 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+				left 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.06s;
+		}
+		.qf-contribute .switch button {
+			transition: color 0.2s ease;
+		}
 	}
 	.qf-contribute .code-editor textarea.code::selection {
 		background: color-mix(in srgb, var(--qf-accent) 35%, transparent);
@@ -1666,13 +1648,28 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		outline: 2px solid var(--qf-accent);
 		outline-offset: 1px;
 	}
-	.qf-contribute .row {
+	.qf-contribute div.row {
 		display: flex;
 		gap: 1rem;
 		flex-wrap: wrap;
 	}
 	.qf-contribute .row > .field {
 		flex: 1 1 12rem;
+	}
+	.qf-contribute .block .row + .field {
+		margin-top: 0.5rem;
+	}
+	.qf-contribute .slug.filename input {
+		flex: none;
+		width: auto;
+		field-sizing: content;
+		min-width: 1ch;
+		padding: 0.5rem 0 0.5rem 1rem;
+		line-height: 1.5rem;
+	}
+	.qf-contribute .slug.filename .suffix {
+		flex: 1;
+		padding: 0;
 	}
 	.qf-contribute .slug {
 		display: flex;
@@ -1689,11 +1686,20 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		white-space: nowrap;
 		font-size: var(--sl-text-sm);
 	}
+	.qf-contribute .slug .suffix {
+		padding: 0 1rem 0 0;
+		color: var(--qf-muted);
+		white-space: nowrap;
+		font-size: var(--sl-text-sm);
+	}
 	.qf-contribute .slug input {
 		border: 0;
 		background: none;
 		box-shadow: none;
 		padding-left: 0.1rem;
+	}
+	.qf-contribute .error:empty {
+		display: none;
 	}
 	.qf-contribute .error:not(:empty) {
 		color: var(--qf-danger);
@@ -1716,6 +1722,9 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		border: 0;
 		padding: 0;
 		margin: 0;
+	}
+	.qf-contribute .kinds legend {
+		margin-bottom: 1.5rem;
 	}
 	.qf-contribute .kind-list {
 		display: flex;
@@ -1765,7 +1774,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 
 	.qf-contribute h2 + .blocks {
-		margin-top: 1rem;
+		margin-top: 0;
 	}
 	.qf-contribute .blocks {
 		display: flex;
@@ -1779,9 +1788,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		padding: 0.5rem 1rem 1rem;
 		border-radius: 0.5rem;
 		background: linear-gradient(180deg, color-mix(in srgb, var(--qf-text) 10%, transparent), color-mix(in srgb, var(--qf-text) 5%, transparent));
-	}
-	.qf-contribute .block .field > .label {
-		font-size: var(--sl-text-sm);
 	}
 	.qf-contribute .block-head {
 		display: flex;
@@ -1825,41 +1831,61 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	.qf-contribute button.icon[data-icon='remove'] {
 		--icon: url('/icon_remove.svg');
 	}
+	.qf-contribute button.icon[data-icon='add'] {
+		--icon: url('/icon_add.svg');
+	}
+	.qf-contribute button.icon.tiny,
+	.qf-contribute button.icon.tiny::before {
+		width: 20px;
+		height: 20px;
+		mask-size: 20px;
+	}
 	.qf-contribute button.icon:hover:not(:disabled),
-	.qf-contribute button.icon:focus-visible {
+	.qf-contribute button.pill:hover:not(:disabled),
+	.qf-contribute button.icon:focus-visible,
+	.qf-contribute button.pill:focus-visible {
 		outline: none;
 		background: color-mix(in srgb, var(--qf-accent) 10%, transparent);
 		color: var(--qf-accent);
 	}
-	.qf-contribute button.icon:active:not(:disabled) {
+	.qf-contribute button.icon:active:not(:disabled),
+	.qf-contribute button.pill:active:not(:disabled) {
 		background: color-mix(in srgb, var(--qf-text) 10%, transparent);
 		color: var(--qf-muted);
 	}
-	.qf-contribute button.icon:disabled {
+	.qf-contribute button.icon:disabled,
+	.qf-contribute button.pill:disabled {
 		opacity: 0.2;
 	}
-	.qf-contribute .sub {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding-top: 0.5rem;
-		border-top: 1px dashed var(--qf-line);
-	}
 	.qf-contribute .steps {
-		margin: 0;
-		padding-left: 1.25rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 1rem;
+		margin-bottom: 1rem;
 	}
-	.qf-contribute .steps li {
+	.qf-contribute .step {
 		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.5rem;
 		align-items: flex-start;
 	}
-	.qf-contribute .steps .field {
+	.qf-contribute .step textarea {
+		min-height: 6rem;
+	}
+	.qf-contribute .step > button.icon {
+		margin-top: 1.5rem;
+	}
+	.qf-contribute button.pill {
+		height: 28px;
+		padding: 0 1rem;
+		border: 0;
+		border-radius: 18px;
+		background: color-mix(in srgb, var(--qf-text) 16%, transparent);
+		color: var(--qf-text);
+		line-height: 1.5rem;
+	}
+	.qf-contribute button.add-step {
 		width: 100%;
+		padding: 0 0.3rem;
 	}
 	.qf-contribute .causes {
 		display: flex;
@@ -1878,9 +1904,13 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .add-block {
 		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.qf-contribute .add-block-options {
+		display: flex;
 		flex-wrap: wrap;
-		gap: 0.5rem;
-		align-items: center;
+		gap: 10px;
 	}
 
 	/* GitHub sign-in card */
@@ -1963,58 +1993,78 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 	/* Scene tree editor */
 	.qf-contribute .tree-editor {
-		padding: 0.75rem;
+		padding: 0.5rem 1rem;
 		border-radius: 0.5rem;
-		background: var(--qf-frame-tree);
+		background: var(--qf-surface);
 		color: var(--qf-code-default);
 		overflow-x: auto;
 	}
 	.qf-contribute .tree-grid {
 		display: grid;
-		grid-template-columns: minmax(9rem, max-content) max-content max-content minmax(5rem, 1fr) max-content;
-		column-gap: 0.5rem;
-		row-gap: 0.2rem;
+		grid-template-columns: minmax(0, 14rem) minmax(max-content, 1fr) max-content;
+		column-gap: 1rem;
+		row-gap: 0.25rem;
 		align-items: center;
 	}
 	.qf-contribute .tree-row {
 		display: contents;
 	}
-	.qf-contribute .tree-head {
+	.qf-contribute .tree-head,
+	.qf-contribute .tree-meta {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: 0.5rem;
 		min-width: 0;
-		padding-left: calc(var(--depth) * 1.25rem);
+		min-height: 1.5rem;
+	}
+	.qf-contribute .tree-head {
+		padding-left: calc(var(--depth) * 1rem);
 	}
 	.qf-contribute .tree-row input[type='text'] {
 		width: auto;
-		padding: 0.2rem 0.45rem;
+		min-width: 3rem;
+		field-sizing: content;
+		padding: 0 0.25rem;
 		border-color: transparent;
 		background: transparent;
 		box-shadow: none;
 		font-size: var(--sl-text-sm);
+		line-height: 1.5rem;
 		color: inherit;
 	}
 	.qf-contribute .tree-row input[type='text']:hover,
 	.qf-contribute .tree-row input[type='text']:focus-visible {
-		border-color: var(--qf-frame-line);
+		border-color: var(--qf-line);
 		background: var(--qf-bg);
 	}
-	.qf-contribute .tree-name {
+	.qf-contribute .tree-retype {
+		display: inline-flex;
+		align-items: center;
+		padding: 0;
+		border: 0;
+		border-radius: 0.25rem;
+		background: none;
+	}
+	.qf-contribute .tree-retype:hover,
+	.qf-contribute .tree-retype:focus-visible {
+		color: var(--qf-accent);
+	}
+	.qf-contribute .tree-row input.tree-name {
 		flex: 1;
-		width: 100% !important;
-		min-width: 5rem;
-		font-weight: 600;
+		width: 0;
+		min-width: 2rem;
+		field-sizing: fixed;
+		text-overflow: ellipsis;
 	}
-	.qf-contribute .tree-type {
-		color: var(--qf-frame-muted);
-		font-size: var(--sl-text-xs);
-		white-space: nowrap;
+	.qf-contribute .tree-row input.tree-note {
+		flex: 1;
+		width: 4rem;
+		max-width: 14rem;
+		field-sizing: fixed;
 	}
-	.qf-contribute .tree-note {
-		width: 100% !important;
-		min-width: 0;
-		font-style: italic;
+	.qf-contribute .tree-note::placeholder {
+		color: var(--qf-muted);
+		opacity: 1;
 	}
 	.qf-contribute .tree-row input.tree-note:not(:placeholder-shown) {
 		background: var(--qf-frame-note);
@@ -2023,33 +2073,25 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .tree-flag {
 		display: inline-flex;
-		padding: 0.2rem;
-		border: 1px solid transparent;
-		border-radius: 0.25rem;
+		padding: 0;
+		border: 0;
 		background: none;
 		opacity: 0.3;
 	}
 	.qf-contribute .tree-flag[aria-pressed='true'] {
 		opacity: 1;
-		border-color: var(--qf-frame-line);
-		background: var(--qf-bg);
 	}
 	.qf-contribute .tree-flag:hover {
 		opacity: 0.8;
 	}
 	.qf-contribute .tree-flags {
 		display: inline-flex;
-		gap: 0.15rem;
+		gap: 0.5rem;
 	}
 	.qf-contribute .tree-tools {
 		display: inline-flex;
-		gap: 0.15rem;
-		justify-self: end;
-		padding-left: 0.5rem;
-	}
-	.qf-contribute .tree-tools .small {
-		padding: 0.15rem 0.5rem;
-		line-height: 1.2;
+		gap: 0.25rem;
+		flex-shrink: 0;
 	}
 	.qf-contribute .tree-foot {
 		display: flex;
@@ -2190,64 +2232,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute .qf-pre .ins {
 		background: color-mix(in srgb, #7bd88f 15%, transparent);
-	}
-	.qf-contribute .qf-tabs .tab-bar {
-		display: flex;
-		gap: 1rem;
-		margin-bottom: 0.5rem;
-		border-bottom: 1px solid var(--qf-line);
-	}
-	.qf-contribute .qf-tabs [role='tab'] {
-		padding: 0.25rem 0 0.4rem;
-		margin-bottom: -1px;
-		border: 0;
-		border-bottom: 2px solid transparent;
-		background: none;
-		color: var(--qf-muted);
-		font: inherit;
-		font-size: var(--sl-text-sm);
-		cursor: pointer;
-	}
-	.qf-contribute .qf-tabs [role='tab'][aria-selected='true'] {
-		color: var(--qf-text);
-		border-bottom-color: var(--qf-accent);
-	}
-	.qf-contribute .qf-tree {
-		padding: 1rem;
-		border-radius: 0.5rem;
-		background: var(--qf-frame-tree);
-		font-size: var(--sl-text-sm);
-		color: var(--qf-code-default);
-		overflow-x: auto;
-	}
-	.qf-contribute .qf-tree ul {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-	}
-	.qf-contribute .qf-tree ul ul {
-		margin-left: 8px;
-		padding-left: 14px;
-		border-left: 1px solid var(--qf-frame-line);
-	}
-	.qf-contribute .qf-tree .row {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 0.15rem 0;
-		white-space: nowrap;
-	}
-	.qf-contribute .qf-tree .type {
-		color: var(--qf-frame-muted);
-		font-size: var(--sl-text-xs);
-	}
-	.qf-contribute .qf-tree .note {
-		margin-left: 1rem;
-		padding: 0.125rem 0.75rem;
-		border-radius: 0.375rem;
-		background: var(--qf-frame-note);
-		color: #1a1a1a;
-		font-style: italic;
 	}
 	.qf-contribute .qf-bad {
 		color: var(--qf-danger);

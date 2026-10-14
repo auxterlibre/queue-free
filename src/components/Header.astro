@@ -1,15 +1,21 @@
 ---
 import SiteTitle from 'virtual:starlight/components/SiteTitle';
 import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+
+const path = Astro.url.pathname;
+const isWrite = path.startsWith('/write');
+const isSupport = path.startsWith('/support');
+const current = (on: boolean) => (on ? 'page' : undefined);
 ---
 
 <div class="qf-header">
 	<SiteTitle />
 	<nav class="tabs" aria-label="Site">
-		<a href="/write/" aria-current={Astro.url.pathname.startsWith('/write') ? 'page' : undefined}>
+		<a href="/" aria-current={current(!isWrite && !isSupport)}>Tutorials</a>
+		<a href="/write/" aria-current={current(isWrite)}>
 			<span class="full">Write a page</span><span class="short" aria-hidden="true">Write</span>
 		</a>
-		<a href="/support/" aria-current={Astro.url.pathname.startsWith('/support') ? 'page' : undefined}>Support</a>
+		<a href="/support/" aria-current={current(isSupport)}>Support</a>
 	</nav>
 	<div class="theme print:hidden">
 		<ThemeSelect />
@@ -31,8 +37,12 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 	.tabs .full {
 		display: none;
 	}
+	/* Below 50rem the logo already links home and three tabs overflow. */
+	.tabs a:first-child {
+		display: none;
+	}
 	.tabs a {
-		padding: 0.625rem 0.5rem;
+		padding: 0 0.5rem;
 		border-bottom: 2px solid transparent;
 		color: var(--qf-muted);
 		font-size: 1rem;
@@ -62,6 +72,9 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 		}
 		.tabs .full {
 			display: inline;
+		}
+		.tabs a:first-child {
+			display: block;
 		}
 		.tabs .short {
 			display: none;

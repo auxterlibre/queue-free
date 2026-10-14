@@ -1,14 +1,24 @@
 // Shared between the contribute form (browser) and the Pages Function that
 // turns a submission into a pull request. Keep it free of DOM and Node APIs.
 
+import { SCENE_TREE_LINE } from '../scene-tree.ts';
+
 export type Categories = Record<string, string>;
 export type PageKind = 'how-to' | 'error';
 export type CodeLang = 'gdscript' | 'csharp' | 'txt';
+export type CodeTab = 'gdscript' | 'csharp';
+export const CODE_EXT: Record<CodeTab, string> = { gdscript: '.gd', csharp: '.cs' };
 export type CalloutKind = 'note' | 'tip' | 'caution';
 
 export interface CodeSnippet {
-	filename: string;
 	code: string;
+	wrong: string;
+	right: string;
+}
+
+export function codeFilename(name: string, lang: CodeTab): string {
+	const stem = name.trim();
+	return stem ? stem + CODE_EXT[lang] : '';
 }
 
 export interface CauseRow {
@@ -19,8 +29,7 @@ export interface CauseRow {
 export type Block =
 	| { type: 'heading'; text: string }
 	| { type: 'prose'; text: string }
-	| { type: 'code'; lang: CodeLang; filename: string; code: string; wrong: string; right: string }
-	| { type: 'tabs'; gdscript: CodeSnippet; csharp: CodeSnippet }
+	| { type: 'code'; lang: CodeTab; name: string; gdscript: CodeSnippet; csharp: CodeSnippet }
 	| { type: 'tree'; text: string }
 	| { type: 'callout'; kind: CalloutKind; title: string; text: string }
 	| { type: 'error'; message: string }
@@ -68,8 +77,6 @@ export const LIMITS = {
 };
 
 const LINE_SPEC = /^\d+(-\d+)?(,\d+(-\d+)?)*$/;
-// Same shape SceneTree.astro accepts; a line that fails here fails the build.
-const TREE_LINE = /^(\s*)([^:"\[]+?)\s*(?::\s*(\w+))?\s*((?:\[\w+\]\s*)*)(?:"(.*)")?\s*$/;
 const ESM_LINE = /^(import|export)\s/m;
 
 const QUESTION_PREFIX = /^(how (do|can|should) i|how to|why (does|do|did) (it say|i get|it)|why (does|do|did)|why am i getting|why|what (is|does)|where (is|do i))\s+/i;
@@ -148,7 +155,7 @@ function checkTree(issues: Issue[], path: string, value: unknown) {
 		return;
 	}
 	for (const line of lines) {
-		if (!TREE_LINE.test(line)) {
+		if (!SCENE_TREE_LINE.test(line)) {
 			issues.push({ path, message: `Can't read the line "${line.trim()}". Use "Name: Type".` });
 			return;
 		}
@@ -165,16 +172,6 @@ function checkLineSpec(issues: Issue[], path: string, value: unknown) {
 	}
 }
 
-function checkSnippet(issues: Issue[], path: string, value: unknown, required: boolean) {
-	if (!value || typeof value !== 'object') {
-		issues.push({ path, message: 'Missing.' });
-		return;
-	}
-	const s = value as Record<string, unknown>;
-	checkText(issues, `${path}.filename`, s.filename, 80, false);
-	checkText(issues, `${path}.code`, s.code, LIMITS.code, required);
-}
-
 function checkBlock(issues: Issue[], path: string, value: unknown, headings: string[]) {
 	if (!value || typeof value !== 'object') {
 		issues.push({ path, message: 'Missing.' });
@@ -189,17 +186,23 @@ function checkBlock(issues: Issue[], path: string, value: unknown, headings: str
 			checkProse(issues, `${path}.text`, b.text, LIMITS.text);
 			break;
 		case 'code':
-			if (!['gdscript', 'csharp', 'txt'].includes(b.lang as string)) {
+			if (!['gdscript', 'csharp'].includes(b.lang as string)) {
 				issues.push({ path: `${path}.lang`, message: 'Pick a language.' });
 			}
-			checkText(issues, `${path}.filename`, b.filename, 80, false);
-			checkText(issues, `${path}.code`, b.code, LIMITS.code);
-			checkLineSpec(issues, `${path}.wrong`, b.wrong);
-			checkLineSpec(issues, `${path}.right`, b.right);
-			break;
-		case 'tabs':
-			checkSnippet(issues, `${path}.gdscript`, b.gdscript, true);
-			checkSnippet(issues, `${path}.csharp`, b.csharp, false);
+			checkText(issues, `${path}.name`, b.name, 80, false);
+			for (const lang of ['gdscript', 'csharp'] as const) {
+				const snippet = b[lang] as Record<string, unknown> | undefined;
+				if (!snippet || typeof snippet !== 'object') {
+					issues.push({ path: `${path}.${lang}`, message: 'Missing.' });
+					continue;
+				}
+				checkText(issues, `${path}.${lang}.code`, snippet.code, LIMITS.code, false);
+				checkLineSpec(issues, `${path}.${lang}.wrong`, snippet.wrong);
+				checkLineSpec(issues, `${path}.${lang}.right`, snippet.right);
+			}
+			if (!String((b.gdscript as any)?.code ?? '').trim() && !String((b.csharp as any)?.code ?? '').trim()) {
+				issues.push({ path: `${path}.${b.lang === 'csharp' ? 'csharp' : 'gdscript'}.code`, message: 'Add some code.' });
+			}
 			break;
 		case 'tree':
 			checkTree(issues, `${path}.text`, b.text);

@@ -26,6 +26,7 @@ export default defineConfig({
 			customCss: [
 				'./src/styles/palette.css',
 				'./src/styles/theme.css',
+				'./src/styles/scene-tree.css',
 			],
 			components: {
 				Head: './src/components/Head.astro',

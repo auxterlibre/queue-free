@@ -1,4 +1,4 @@
-import { headingAnchor, type Block, type CodeSnippet, type Page } from './schema.ts';
+import { codeFilename, headingAnchor, type Block, type Page } from './schema.ts';
 
 // Escapes MDX-significant characters in prose while leaving inline code spans
 // untouched, so contributors can still write `code` and **bold**.
@@ -36,10 +36,6 @@ function codeMeta(lang: string, filename: string, wrong = '', right = ''): strin
 	return parts.join(' ');
 }
 
-function snippet(lang: 'gdscript' | 'csharp', s: CodeSnippet): string {
-	return fence(s.code, codeMeta(lang, s.filename));
-}
-
 function indentTree(text: string): string {
 	const lines = text.replace(/\r\n?/g, '\n').split('\n').filter((l) => l.trim());
 	const base = Math.min(...lines.map((l) => l.match(/^\s*/)![0].length));
@@ -53,14 +49,14 @@ function renderBlock(block: Block): string {
 		case 'prose':
 			return escapeProse(block.text);
 		case 'code':
-			return fence(block.code, codeMeta(block.lang, block.filename, block.wrong, block.right));
-		case 'tabs': {
-			const tabs = [`<TabItem label="GDScript">\n\n${snippet('gdscript', block.gdscript)}\n\n</TabItem>`];
-			if (block.csharp.code.trim()) {
-				tabs.push(`<TabItem label="C#">\n\n${snippet('csharp', block.csharp)}\n\n</TabItem>`);
+			{
+				const filled = (['gdscript', 'csharp'] as const).filter((l) => block[l].code.trim());
+				const snippet = (l: 'gdscript' | 'csharp') => fence(block[l].code, codeMeta(l, codeFilename(block.name, l), block[l].wrong, block[l].right));
+				if (filled.length < 2) return snippet(filled[0] ?? 'gdscript');
+				const labels = { gdscript: 'GDScript', csharp: 'C#' };
+				const tabs = filled.map((l) => `<TabItem label="${labels[l]}">\n\n${snippet(l)}\n\n</TabItem>`);
+				return `<Tabs syncKey="lang">\n${tabs.join('\n')}\n</Tabs>`;
 			}
-			return `<Tabs syncKey="lang">\n${tabs.join('\n')}\n</Tabs>`;
-		}
 		case 'tree':
 			return `<SceneTree tree={${templateLiteral('\n' + indentTree(block.text) + '\n')}} />`;
 		case 'callout': {
@@ -96,7 +92,7 @@ export function generateMdx(page: Page): string {
 	const used = new Set(page.blocks.map((b) => b.type));
 	const starlight = ['Aside'];
 	if (used.has('steps')) starlight.push('Steps');
-	if (used.has('tabs')) starlight.push('Tabs', 'TabItem');
+	if (page.blocks.some((b) => b.type === 'code' && b.gdscript.code.trim() && b.csharp.code.trim())) starlight.push('Tabs', 'TabItem');
 
 	const imports = [`import { ${starlight.join(', ')} } from '@astrojs/starlight/components';`];
 	if (used.has('tree')) imports.push(`import SceneTree from '../../../components/SceneTree.astro';`);
