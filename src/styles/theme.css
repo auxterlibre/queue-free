@@ -3,7 +3,7 @@
 	--qf-bg: #141414;
 	--qf-surface: #1c1c1c;
 	--qf-text: #c9c9c9;
-	--qf-muted: #6b6b6b;
+	--qf-muted: #8a8a8a;
 	--qf-line: #4a4a4a;
 	--qf-accent: #478cbf;
 	--qf-link: #478cbf;
@@ -36,7 +36,7 @@
 	--qf-muted: #6b6b6b;
 	--qf-line: #c9c9c9;
 	--qf-accent: #478cbf;
-	--qf-link: #478cbf;
+	--qf-link: #2b6a99;
 	--qf-tag: #b3b3b3;
 }
 
@@ -92,6 +92,10 @@
 		width: 43.3125rem;
 		flex: none;
 	}
+}
+
+html {
+	scrollbar-gutter: stable;
 }
 
 .sidebar-pane {
@@ -254,6 +258,18 @@ html:not([data-has-sidebar]) .sl-container {
 }
 
 .sl-markdown-content a {
+	color: var(--qf-link);
+}
+
+.sl-markdown-content starlight-tabs [role='tab'] {
+	color: var(--qf-muted);
+}
+.sl-markdown-content starlight-tabs [role='tab'][aria-selected='true'] {
+	--sl-tab-color-border: var(--qf-text);
+	color: var(--qf-text);
+}
+.sl-markdown-content starlight-tabs [role='tab']:not([aria-selected='true']):hover,
+.sl-markdown-content starlight-tabs [role='tab']:not([aria-selected='true']):focus-visible {
 	color: var(--qf-link);
 }
 
@@ -441,13 +457,16 @@ starlight-toc nav {
 }
 
 .sl-markdown-content th {
-	font-size: 1.5rem;
+	font-size: 1rem;
 	font-weight: 700;
-	line-height: var(--sl-line-height-headings);
+	line-height: 1.5rem;
+	color: var(--qf-muted);
 }
 
-.sl-markdown-content :is(th, td):last-child {
-	width: 15.5rem;
+@media (min-width: 50rem) {
+	.sl-markdown-content :is(th, td):last-child {
+		width: 15.5rem;
+	}
 }
 
 .qf-404-home {

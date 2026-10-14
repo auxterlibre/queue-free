@@ -32,7 +32,7 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 		display: none;
 	}
 	.tabs a {
-		padding: 0 0.5rem;
+		padding: 0.625rem 0.5rem;
 		border-bottom: 2px solid transparent;
 		color: var(--qf-muted);
 		font-size: 1rem;
@@ -52,7 +52,14 @@ import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
 	.theme {
 		display: none;
 	}
+	/* Below 50rem the logo and tabs don't fit beside Starlight's menu button; the drawer carries the links instead. */
+	:global([data-has-sidebar]) .tabs {
+		display: none;
+	}
 	@media (min-width: 50rem) {
+		:global([data-has-sidebar]) .tabs {
+			display: flex;
+		}
 		.tabs .full {
 			display: inline;
 		}

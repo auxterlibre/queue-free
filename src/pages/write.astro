@@ -27,7 +27,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			<div class="modes" role="tablist">
 				<button type="button" data-action="set-mode" data-mode="write" aria-selected="true">Write</button>
 				<button type="button" data-action="set-mode" data-mode="preview" aria-selected="false">Preview</button>
-				<button type="button" data-action="set-mode" data-mode="source" aria-selected="false">Source</button>
 			</div>
 		</div>
 
@@ -58,12 +57,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 			<div class="preview sl-markdown-content" id="qf-preview"></div>
 		</section>
 
-		<section class="panel" data-panel="source" hidden>
-			<p class="hint">This is the file the form will add to the site. You never need to edit it.</p>
-			<div class="source-row"><button type="button" data-action="copy-source">Copy</button></div>
-			<pre id="qf-source"></pre>
-		</section>
-
 		<section class="panel done" data-panel="done" hidden>
 			<h2>Sent for review</h2>
 			<p id="qf-done-text">Thanks. Your page is now a pull request. You can follow the review there:</p>
@@ -84,7 +77,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 {siteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer />}
 
 <script>
-	import { generateMdx, pagePath } from '../lib/contribute/mdx.ts';
 	import { plainLines } from '../lib/contribute/code-lines.ts';
 	import type { CodeThemes, Highlighter } from '../lib/contribute/highlight.ts';
 	import {
@@ -102,7 +94,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		type PageKind,
 	} from '../lib/contribute/schema.ts';
 
-	type Mode = 'write' | 'preview' | 'source' | 'done';
+	type Mode = 'write' | 'preview' | 'done';
 
 	interface Draft {
 		page: Page;
@@ -833,7 +825,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		let pickerTarget: { block: number; parent: string } | null = null;
 		const formEl = root.querySelector<HTMLElement>('#qf-form')!;
 		const previewEl = root.querySelector<HTMLElement>('#qf-preview')!;
-		const sourceEl = root.querySelector<HTMLElement>('#qf-source')!;
 		const summaryEl = root.querySelector<HTMLElement>('#qf-summary')!;
 		const submitBtn = root.querySelector<HTMLButtonElement>('#qf-submit')!;
 		const siteKey = root.dataset.siteKey ?? '';
@@ -850,7 +841,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 
 		const refreshOutputs = () => {
 			previewEl.innerHTML = renderPreview(draft.page);
-			sourceEl.textContent = generateMdx(draft.page);
 			highlightPreview();
 		};
 
@@ -1291,9 +1281,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 				case 'remove-cause':
 					(blocks[i] as { rows: { symptom: string; section: string }[] }).rows.splice(Number(item), 1);
 					break;
-				case 'copy-source':
-					navigator.clipboard?.writeText(sourceEl.textContent ?? '');
-					return;
 				case 'reset':
 					if (root.querySelector<HTMLElement>('[data-panel="done"]')!.hidden && !confirm('Clear everything and start over?')) return;
 					draft = newDraft(categories);
@@ -1393,13 +1380,29 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		background: var(--qf-bg);
 	}
 	.qf-contribute .modes {
+		position: relative;
 		display: flex;
 		padding: 2px;
 		border: 1px solid var(--qf-muted);
 		border-radius: 15px;
 		background: var(--qf-bg);
 	}
+	.qf-contribute .modes::before {
+		content: '';
+		position: absolute;
+		top: 2px;
+		bottom: 2px;
+		left: 2px;
+		right: 50%;
+		border-radius: 12px;
+		background: color-mix(in srgb, var(--qf-muted) 50%, transparent);
+	}
+	.qf-contribute .modes:has(button:nth-child(2)[aria-selected='true'])::before {
+		left: 50%;
+		right: 2px;
+	}
 	.qf-contribute .modes button {
+		position: relative;
 		flex: 1;
 		border: 0;
 		background: none;
@@ -1410,22 +1413,36 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		cursor: pointer;
 		font: inherit;
 	}
-	.qf-contribute .modes button:hover,
-	.qf-contribute .modes button:focus-visible {
-		color: var(--qf-text);
-		background: color-mix(in srgb, var(--qf-muted) 20%, transparent);
+	.qf-contribute .modes button:hover:not([aria-selected='true']),
+	.qf-contribute .modes button:focus-visible:not([aria-selected='true']) {
+		color: var(--qf-accent);
+	}
+	.qf-contribute .modes button:active:not([aria-selected='true']) {
+		opacity: 0.5;
 	}
 	.qf-contribute .modes button:focus-visible {
 		outline: 2px solid var(--qf-accent);
 		outline-offset: -2px;
 	}
 	.qf-contribute .modes button[aria-selected='true'] {
-		background: color-mix(in srgb, var(--qf-muted) 50%, transparent);
 		color: var(--qf-text);
 	}
 	@media (prefers-reduced-motion: no-preference) {
+		.qf-contribute .modes::before {
+			transition:
+				left 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+				right 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.06s;
+		}
+		.qf-contribute .modes:has(button:nth-child(2)[aria-selected='true'])::before {
+			transition:
+				right 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+				left 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.06s;
+		}
 		.qf-contribute .modes button {
-			transition: background-color 0.12s ease, color 0.12s ease;
+			transition: color 0.2s ease, opacity 0.12s ease, scale 0.2s cubic-bezier(0.34, 1.76, 0.5, 1);
+		}
+		.qf-contribute .modes button:active {
+			scale: 0.94;
 		}
 	}
 
@@ -1636,8 +1653,7 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	:root[data-theme='light'] .qf-contribute .tok {
 		color: var(--shiki-light);
 	}
-	.qf-contribute textarea.code,
-	.qf-contribute #qf-source {
+	.qf-contribute textarea.code {
 		font-family: var(--sl-font-mono);
 		font-size: 0.875rem;
 		tab-size: 4;
@@ -1906,7 +1922,6 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 	}
 	.qf-contribute button.small,
 	.qf-contribute .submit-row button:not(.primary),
-	.qf-contribute .source-row button,
 	.qf-contribute .done button {
 		padding: 0.35rem 0.75rem;
 		border: 1px solid var(--qf-line);
@@ -1933,19 +1948,8 @@ const siteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '0x4AAAAAAFUhulcfDk
 		border: 0;
 		border-radius: 999px;
 		background: var(--qf-accent);
-		color: #fff;
+		color: #141414;
 		font-weight: 600;
-	}
-	.qf-contribute .source-row {
-		display: flex;
-		justify-content: flex-end;
-	}
-	.qf-contribute #qf-source {
-		padding: 1rem;
-		border-radius: 0.5rem;
-		background: var(--qf-frame-code);
-		color: var(--qf-code-default);
-		margin: 0;
 	}
 	.qf-contribute .done {
 		padding: 1.5rem;

@@ -5,6 +5,14 @@ import { KOFI_NAME } from '../site.ts';
 
 <Default><slot /></Default>
 
+<style is:global>
+	/* Ko-fi pins itself bottom-left, under the sidebar; keep it clear of navigation. */
+	.floatingchat-container-wrap {
+		left: auto !important;
+		right: 1rem !important;
+	}
+</style>
+
 <script is:inline src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js"></script>
 <script is:inline define:vars={{ KOFI_NAME }}>
 	// The ClientRouter swaps <body> on navigation, which drops the widget
@@ -20,8 +28,8 @@ import { KOFI_NAME } from '../site.ts';
 		kofiWidgetOverlay.draw(KOFI_NAME, {
 			'type': 'floating-chat',
 			'floating-chat.donateButton.text': 'Support Me',
-			'floating-chat.donateButton.background-color': '#5bc0de',
-			'floating-chat.donateButton.text-color': '#323842',
+			'floating-chat.donateButton.background-color': '#478cbf',
+			'floating-chat.donateButton.text-color': '#141414',
 		});
 		widgetNodes = [
 			...[...document.head.children].filter((node) => !before.has(node)).map((node) => ({ node, inHead: true })),

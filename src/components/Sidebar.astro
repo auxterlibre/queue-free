@@ -11,6 +11,10 @@ import Search from 'virtual:starlight/components/Search';
 <div class="qf-sidebar" transition:persist="sidebar">
 	<Search />
 	<Default />
+	<nav class="drawer-links" aria-label="Site">
+		<a href="/write/">Write a page</a>
+		<a href="/support/">Support</a>
+	</nav>
 </div>
 
 <style>
@@ -19,6 +23,30 @@ import Search from 'virtual:starlight/components/Search';
 		display: flex;
 		flex-direction: column;
 		gap: 2rem;
+	}
+	.drawer-links {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--qf-line);
+	}
+	.drawer-links a {
+		padding: 0.5rem;
+		border-radius: 0.25rem;
+		color: var(--qf-text);
+		font-weight: 700;
+		line-height: 1.5rem;
+		text-decoration: none;
+	}
+	.drawer-links a:hover,
+	.drawer-links a:focus-visible {
+		color: var(--qf-link);
+	}
+	@media (min-width: 50rem) {
+		.drawer-links {
+			display: none;
+		}
 	}
 </style>
 

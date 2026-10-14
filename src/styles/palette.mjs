@@ -41,7 +41,7 @@ export const light = {
 		annotation: '#cc8040',
 		keyword: '#e62282',
 		baseType: '#009933',
-		error: '#ff786b',
+		error: '#c4321f',
 		dim: '#7d7d7d',
 		symbol: '#00009c',
 		controlFlow: '#bd1fcc',
