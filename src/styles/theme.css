@@ -4,6 +4,7 @@
 	--qf-surface: #1c1c1c;
 	--qf-text: #c9c9c9;
 	--qf-muted: #8a8a8a;
+	--qf-weak: #6b6b6b;
 	--qf-line: #4a4a4a;
 	--qf-accent: #478cbf;
 	--qf-link: #478cbf;
@@ -34,6 +35,7 @@
 	--qf-surface: #e6e6e6;
 	--qf-text: #292929;
 	--qf-muted: #6b6b6b;
+	--qf-weak: #8a8a8a;
 	--qf-line: #c9c9c9;
 	--qf-accent: #478cbf;
 	--qf-link: #2b6a99;
@@ -58,7 +60,7 @@
 
 @media (min-width: 50rem) {
 	:root {
-		--sl-text-h1: 3rem;
+		--sl-text-h1: 2.5rem;
 		--sl-text-h2: 2rem;
 		--sl-text-h3: 1.5rem;
 		--sl-text-h4: 1.25rem;
@@ -242,31 +244,31 @@ html:not([data-has-sidebar]) .sl-container {
 	font-weight: 400;
 	line-height: 1.5rem;
 	padding: 0.25rem 0.5rem;
-	color: var(--qf-text);
+	color: var(--qf-weak);
 }
 
 .sidebar-content [aria-current='page'],
 .sidebar-content [aria-current='page']:hover,
 .sidebar-content [aria-current='page']:focus {
-	background: var(--qf-line);
+	background: var(--qf-indicator-bg);
 	color: var(--qf-text);
 	font-weight: 400;
 }
 
 .right-sidebar h2 {
-	font-size: 1rem;
-	font-weight: 700;
-	color: var(--qf-text);
+	display: none;
 }
 
 .right-sidebar a {
 	font-size: 0.875rem;
 	line-height: 1.5rem;
-	color: var(--qf-muted);
+	color: var(--qf-weak);
 }
 
 .right-sidebar a[aria-current='true'] {
 	color: var(--qf-text);
+	font-weight: 700;
+	background: none;
 }
 
 .sidebar-content a:not([aria-current='page']):hover,
@@ -422,16 +424,10 @@ html:not([data-has-sidebar]) .sl-container {
 
 /* --- Motion ------------------------------------------------------------- */
 
-/* Sliding current-item pill for the sidebar and table of contents (see Head.astro). */
-.qf-sidebar,
-starlight-toc nav {
-	position: relative;
-}
+/* Sliding current-item pill for the sidebar (see Head.astro). */
 .qf-sidebar {
-	--qf-indicator-bg: var(--qf-line);
-}
-starlight-toc nav {
-	--qf-indicator-bg: var(--qf-surface);
+	position: relative;
+	--qf-indicator-bg: linear-gradient(90deg, color-mix(in srgb, var(--qf-line) 50%, transparent), transparent);
 }
 .qf-indicator {
 	position: absolute;

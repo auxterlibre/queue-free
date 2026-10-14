@@ -67,8 +67,7 @@ const preload = [
 		document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
 	});
 
-	// A pill that slides to the current item in the sidebar and the table of
-	// contents instead of the highlight jumping. Styled by `.qf-indicator`.
+	// A pill that slides to the current sidebar item instead of the highlight jumping. Styled by `.qf-indicator`.
 	const tracked = new WeakSet<Element>();
 	const track = (container: Element | null, currentSelector: string) => {
 		if (!container) return;
@@ -147,7 +146,6 @@ const preload = [
 		// to it keeps the pill alive across page swaps so it slides rather than
 		// being recreated at the top.
 		track(document.querySelector('.qf-sidebar'), 'a[aria-current="page"]');
-		track(document.querySelector('starlight-toc nav'), 'a[aria-current="true"]');
 		tameToc(document.querySelector('starlight-toc'));
 	});
 </script>
