@@ -207,7 +207,7 @@ html:not([data-has-sidebar]) .sl-container {
 .sidebar-content .large {
 	font-size: 1rem;
 	font-weight: 700;
-	color: var(--qf-text);
+	color: var(--qf-muted);
 }
 
 /* Flush with the container so the list's guide line sits under the first character. */
